@@ -6,11 +6,12 @@ edition = "2024"
 [dependencies]
 anyhow = "*"
 eframe = { version = "0.33", default-features = false, features = ["default_fonts", "wgpu", "wayland"] }
-egui = "0.33"
+egui = { version = "0.33", default-features = false, features = ["default_fonts", "rayon"] }
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 serde_yml = "*"
 toml = "*"
+rayon = "*"
 tokio = { version = "*", features = ["rt-multi-thread", "macros", "time"] }
 tracing = "*"
 tracing-subscriber = { version = "*", features = ["fmt", "env-filter"] }

@@ -29,7 +29,7 @@ println!("{guid}");
 
 ## Graph rendering
 
-The egui app renders the sample graph by drawing node rectangles, labels, and cubic bezier connection curves via `src/gui/node.rs`.
+The egui app renders the sample graph by drawing node rectangles, labels, and cubic bezier connection curves via `src/gui/node.rs`. Nodes can be dragged by their title bar to reposition them.
 
 Startup initialization (dotenv + tracing) lives in `src/init.rs`.
 

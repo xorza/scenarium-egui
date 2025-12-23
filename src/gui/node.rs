@@ -41,7 +41,7 @@ impl NodeLayout {
     }
 }
 
-pub fn render_graph(ui: &mut egui::Ui, graph: &model::Graph) {
+pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
     let rect = ui.available_rect_before_wrap();
     let painter = ui.painter_at(rect);
     let origin = rect.min;
@@ -49,35 +49,37 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &model::Graph) {
 
     layout.assert_valid();
 
-    let node_lookup: HashMap<_, _> = graph.nodes.iter().map(|node| (node.id, node)).collect();
+    {
+        let node_lookup: HashMap<_, _> = graph.nodes.iter().map(|node| (node.id, node)).collect();
 
-    for node in &graph.nodes {
-        for (input_index, input) in node.inputs.iter().enumerate() {
-            let Some(connection) = &input.connection else {
-                continue;
-            };
+        for node in &graph.nodes {
+            for (input_index, input) in node.inputs.iter().enumerate() {
+                let Some(connection) = &input.connection else {
+                    continue;
+                };
 
-            let source_node = node_lookup
-                .get(&connection.node_id)
-                .expect("graph validation must guarantee source nodes exist");
+                let source_node = node_lookup
+                    .get(&connection.node_id)
+                    .expect("graph validation must guarantee source nodes exist");
 
-            let start = node_output_pos(origin, source_node, connection.output_index, &layout);
-            let end = node_input_pos(origin, node, input_index, &layout);
+                let start = node_output_pos(origin, source_node, connection.output_index, &layout);
+                let end = node_input_pos(origin, node, input_index, &layout);
 
-            let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(80, 160, 255));
-            let control_offset = bezier_control_offset(start, end);
-            let curve = egui::epaint::CubicBezierShape::from_points_stroke(
-                [
-                    start,
-                    start + egui::vec2(control_offset, 0.0),
-                    end + egui::vec2(-control_offset, 0.0),
-                    end,
-                ],
-                false,
-                egui::Color32::TRANSPARENT,
-                stroke,
-            );
-            painter.add(curve);
+                let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(80, 160, 255));
+                let control_offset = bezier_control_offset(start, end);
+                let curve = egui::epaint::CubicBezierShape::from_points_stroke(
+                    [
+                        start,
+                        start + egui::vec2(control_offset, 0.0),
+                        end + egui::vec2(-control_offset, 0.0),
+                        end,
+                    ],
+                    false,
+                    egui::Color32::TRANSPARENT,
+                    stroke,
+                );
+                painter.add(curve);
+            }
         }
     }
 
@@ -86,9 +88,18 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &model::Graph) {
     let node_fill = visuals.widgets.noninteractive.bg_fill;
     let node_stroke = visuals.widgets.noninteractive.bg_stroke;
 
-    for node in &graph.nodes {
+    for node in &mut graph.nodes {
         let node_size = node_size(node, &layout);
         let node_rect = egui::Rect::from_min_size(origin + node.pos.to_vec2(), node_size);
+        let header_rect =
+            egui::Rect::from_min_size(node_rect.min, egui::vec2(node_size.x, layout.header_height));
+
+        let header_id = ui.make_persistent_id(("node_header", node.id));
+        let response = ui.interact(header_rect, header_id, egui::Sense::drag());
+
+        if response.dragged() {
+            node.pos += response.drag_delta();
+        }
 
         painter.rect(
             node_rect,
