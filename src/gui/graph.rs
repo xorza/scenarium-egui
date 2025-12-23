@@ -96,6 +96,8 @@ pub fn render_graph(
 
     let pointer_pos = ui.input(|input| input.pointer.hover_pos());
     let pointer_in_rect = pointer_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
+    let middle_down = ui.input(|input| input.pointer.middle_down());
+    let pointer_delta = ui.input(|input| input.pointer.delta());
     let origin = rect.min + graph.pan;
     let port_radius = node::port_radius_for_scale(graph.zoom);
     let port_activation = (port_radius * 1.6).max(10.0);
@@ -127,6 +129,17 @@ pub fn render_graph(
 
     if pan_response.dragged() && !pointer_over_node && !breaker.active && !connection_drag.active {
         graph.pan += pan_response.drag_delta();
+    }
+    if middle_down && pointer_in_rect && !breaker.active && !connection_drag.active {
+        assert!(
+            pointer_delta.x.is_finite(),
+            "pointer delta x must be finite"
+        );
+        assert!(
+            pointer_delta.y.is_finite(),
+            "pointer delta y must be finite"
+        );
+        graph.pan += pointer_delta;
     }
 
     let primary_pressed = ui.input(|input| input.pointer.primary_pressed());
@@ -187,7 +200,13 @@ pub fn render_graph(
     let zoom_active = pointer_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
 
     if zoom_active {
-        let zoom_delta = ui.input(|input| input.zoom_delta());
+        let mut zoom_delta = ui.input(|input| input.zoom_delta());
+        let scroll_delta = ui.input(|input| input.smooth_scroll_delta.y);
+        if scroll_delta.abs() > f32::EPSILON {
+            let scroll_zoom = (scroll_delta * 0.002).exp();
+            assert!(scroll_zoom.is_finite(), "scroll zoom factor must be finite");
+            zoom_delta *= scroll_zoom;
+        }
         if (zoom_delta - 1.0).abs() > f32::EPSILON {
             let clamped_zoom = (graph.zoom * zoom_delta).clamp(MIN_ZOOM, MAX_ZOOM);
             assert!(clamped_zoom.is_finite(), "clamped zoom must be finite");
