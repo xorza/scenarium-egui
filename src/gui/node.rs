@@ -119,10 +119,18 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
     let node_stroke = visuals.widgets.noninteractive.bg_stroke;
     let selected_stroke =
         egui::Stroke::new(node_stroke.width.max(2.0), visuals.selection.stroke.color);
+    let input_port_color = egui::Color32::from_rgb(70, 150, 255);
+    let output_port_color = egui::Color32::from_rgb(70, 200, 200);
+    let input_hover_color = egui::Color32::from_rgb(120, 190, 255);
+    let output_hover_color = egui::Color32::from_rgb(110, 230, 210);
     let heading_font = scaled_font(ui, egui::TextStyle::Heading, graph.zoom);
     let body_font = scaled_font(ui, egui::TextStyle::Body, graph.zoom);
     let header_text_offset = 4.0 * graph.zoom;
+    let port_radius = (5.5 * graph.zoom).clamp(3.0, 7.5);
     let mut selection_request = None;
+
+    assert!(port_radius.is_finite(), "port radius must be finite");
+    assert!(port_radius > 0.0, "port radius must be positive");
 
     for node in &mut graph.nodes {
         let node_size = node_size(node, &layout);
@@ -159,6 +167,34 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
             },
             egui::StrokeKind::Inside,
         );
+
+        for (index, _input) in node.inputs.iter().enumerate() {
+            let center = node_input_pos(origin, node, index, &layout, graph.zoom);
+            let port_rect = egui::Rect::from_center_size(
+                center,
+                egui::vec2(port_radius * 2.0, port_radius * 2.0),
+            );
+            let color = if ui.rect_contains_pointer(port_rect) {
+                input_hover_color
+            } else {
+                input_port_color
+            };
+            painter.circle_filled(center, port_radius, color);
+        }
+
+        for (index, _output) in node.outputs.iter().enumerate() {
+            let center = node_output_pos(origin, node, index, &layout, graph.zoom);
+            let port_rect = egui::Rect::from_center_size(
+                center,
+                egui::vec2(port_radius * 2.0, port_radius * 2.0),
+            );
+            let color = if ui.rect_contains_pointer(port_rect) {
+                output_hover_color
+            } else {
+                output_port_color
+            };
+            painter.circle_filled(center, port_radius, color);
+        }
 
         painter.text(
             node_rect.min + egui::vec2(layout.padding, header_text_offset),
