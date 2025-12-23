@@ -30,3 +30,18 @@ pub struct Input {
 pub struct Output {
     pub name: String,
 }
+
+impl Default for Node {
+    fn default() -> Self {
+        let id = Uuid::new_v4();
+        let name = format!("Node {}", id);
+
+        Self {
+            id,
+            name,
+            pos: egui::Pos2::ZERO,
+            inputs: Vec::new(),
+            outputs: Vec::new(),
+        }
+    }
+}
