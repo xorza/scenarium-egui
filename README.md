@@ -26,3 +26,7 @@ println!("{guid}");
 - output node connected to divide
 
 `Graph::validate` returns a `Result` if any connection references a missing node or an invalid output index.
+
+## Graph rendering
+
+The egui app renders the sample graph by drawing node rectangles, labels, and connection lines in the central panel painter.
