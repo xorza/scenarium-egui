@@ -39,15 +39,30 @@ impl NodeLayout {
             "corner radius must be non-negative"
         );
     }
+
+    fn scaled(&self, scale: f32) -> Self {
+        assert!(scale > 0.0, "layout scale must be positive");
+        assert!(scale.is_finite(), "layout scale must be finite");
+
+        Self {
+            node_width: self.node_width * scale,
+            header_height: self.header_height * scale,
+            row_height: self.row_height * scale,
+            padding: self.padding * scale,
+            corner_radius: self.corner_radius * scale,
+        }
+    }
 }
 
 pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
     let rect = ui.available_rect_before_wrap();
     let painter = ui.painter_at(rect);
-    let origin = rect.min;
-    let layout = NodeLayout::default();
+    let origin = rect.min + graph.pan;
+    let layout = NodeLayout::default().scaled(graph.zoom);
 
     layout.assert_valid();
+    assert!(graph.zoom > 0.0, "graph zoom must be positive");
+    assert!(graph.zoom.is_finite(), "graph zoom must be finite");
 
     {
         let node_lookup: HashMap<_, _> = graph.nodes.iter().map(|node| (node.id, node)).collect();
@@ -62,8 +77,14 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
                     .get(&connection.node_id)
                     .expect("graph validation must guarantee source nodes exist");
 
-                let start = node_output_pos(origin, source_node, connection.output_index, &layout);
-                let end = node_input_pos(origin, node, input_index, &layout);
+                let start = node_output_pos(
+                    origin,
+                    source_node,
+                    connection.output_index,
+                    &layout,
+                    graph.zoom,
+                );
+                let end = node_input_pos(origin, node, input_index, &layout, graph.zoom);
 
                 let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(80, 160, 255));
                 let control_offset = bezier_control_offset(start, end);
@@ -90,7 +111,8 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
 
     for node in &mut graph.nodes {
         let node_size = node_size(node, &layout);
-        let node_rect = egui::Rect::from_min_size(origin + node.pos.to_vec2(), node_size);
+        let node_rect =
+            egui::Rect::from_min_size(origin + node.pos.to_vec2() * graph.zoom, node_size);
         let header_rect =
             egui::Rect::from_min_size(node_rect.min, egui::vec2(node_size.x, layout.header_height));
 
@@ -98,7 +120,7 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
         let response = ui.interact(header_rect, header_id, egui::Sense::drag());
 
         if response.dragged() {
-            node.pos += response.drag_delta();
+            node.pos += response.drag_delta() / graph.zoom;
         }
 
         painter.rect(
@@ -163,18 +185,20 @@ fn node_input_pos(
     node: &model::Node,
     index: usize,
     layout: &NodeLayout,
+    scale: f32,
 ) -> egui::Pos2 {
     assert!(
         index < node.inputs.len(),
         "input index must be within node inputs"
     );
+    assert!(scale > 0.0, "graph scale must be positive");
     let y = origin.y
-        + node.pos.y
+        + node.pos.y * scale
         + layout.header_height
         + layout.padding
         + layout.row_height * index as f32
         + layout.row_height * 0.5;
-    egui::pos2(origin.x + node.pos.x, y)
+    egui::pos2(origin.x + node.pos.x * scale, y)
 }
 
 fn node_output_pos(
@@ -182,18 +206,20 @@ fn node_output_pos(
     node: &model::Node,
     index: usize,
     layout: &NodeLayout,
+    scale: f32,
 ) -> egui::Pos2 {
     assert!(
         index < node.outputs.len(),
         "output index must be within node outputs"
     );
+    assert!(scale > 0.0, "graph scale must be positive");
     let y = origin.y
-        + node.pos.y
+        + node.pos.y * scale
         + layout.header_height
         + layout.padding
         + layout.row_height * index as f32
         + layout.row_height * 0.5;
-    egui::pos2(origin.x + node.pos.x + layout.node_width, y)
+    egui::pos2(origin.x + node.pos.x * scale + layout.node_width, y)
 }
 
 fn bezier_control_offset(start: egui::Pos2, end: egui::Pos2) -> f32 {

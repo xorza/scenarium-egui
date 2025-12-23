@@ -5,6 +5,8 @@ use uuid::Uuid;
 #[derive(Debug)]
 pub struct Graph {
     pub nodes: Vec<Node>,
+    pub pan: egui::Vec2,
+    pub zoom: f32,
 }
 
 #[derive(Debug)]
@@ -168,6 +170,8 @@ impl Graph {
 
         let graph = Self {
             nodes: vec![value_a, value_b, sum, divide, output],
+            pan: egui::Vec2::ZERO,
+            zoom: 1.0,
         };
 
         assert!(graph.nodes.len() == 5, "test_graph must contain 5 nodes");
