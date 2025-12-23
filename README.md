@@ -33,6 +33,10 @@ The egui app renders the sample graph via `src/gui/graph.rs`, which draws a tran
 
 Startup initialization (dotenv + tracing) lives in `src/init.rs`.
 
+## Graph serialization
+
+`Graph` serializes and deserializes directly (via serde) using `GraphFormat::{Toml, Yaml, Json}` in `src/model.rs`. The API validates loaded graphs and expects internal graphs to be valid before serialization.
+
 ## WGPU backend features
 
 The app uses the eframe WGPU renderer, and backend features are enabled via a direct `wgpu` dependency pinned to the same version as eframe (currently `27.0.1`). If you upgrade eframe, update the `wgpu` version and backend feature list (`metal`, `vulkan`, `dx12`) to match so at least one native backend is compiled; otherwise startup can panic with "No wgpu backend feature that is implemented for the target platform was enabled."

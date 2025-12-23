@@ -1,15 +1,23 @@
-use anyhow::{Result, anyhow};
+use anyhow::{Result, anyhow, bail};
+use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
 use uuid::Uuid;
 
-#[derive(Debug)]
+#[derive(Debug, Clone, Copy)]
+pub enum GraphFormat {
+    Toml,
+    Yaml,
+    Json,
+}
+
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Graph {
     pub nodes: Vec<Node>,
     pub pan: egui::Vec2,
     pub zoom: f32,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Node {
     pub id: Uuid,
     pub name: String,
@@ -18,19 +26,19 @@ pub struct Node {
     pub outputs: Vec<Output>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Connection {
     pub node_id: Uuid,
     pub output_index: usize,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Input {
     pub name: String,
     pub connection: Option<Connection>,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Serialize, Deserialize)]
 pub struct Output {
     pub name: String,
 }
@@ -52,9 +60,19 @@ impl Default for Node {
 
 impl Graph {
     pub fn validate(&self) -> Result<()> {
+        if !self.zoom.is_finite() || self.zoom <= 0.0 {
+            return Err(anyhow!("graph zoom must be finite and positive"));
+        }
+        if !self.pan.x.is_finite() || !self.pan.y.is_finite() {
+            return Err(anyhow!("graph pan must be finite"));
+        }
+
         let mut output_counts = HashMap::new();
 
         for node in &self.nodes {
+            if !node.pos.x.is_finite() || !node.pos.y.is_finite() {
+                return Err(anyhow!("node position must be finite"));
+            }
             let prior = output_counts.insert(node.id, node.outputs.len());
             if prior.is_some() {
                 return Err(anyhow!("duplicate node id detected"));
@@ -75,6 +93,35 @@ impl Graph {
         }
 
         Ok(())
+    }
+
+    pub fn serialize(&self, format: GraphFormat) -> Result<String> {
+        self.validate()?;
+
+        match format {
+            GraphFormat::Json => serde_json::to_string_pretty(self).map_err(anyhow::Error::from),
+            GraphFormat::Yaml => serde_yml::to_string(self).map_err(anyhow::Error::from),
+            GraphFormat::Toml => toml::to_string(self).map_err(anyhow::Error::from),
+        }
+    }
+
+    pub fn deserialize(format: GraphFormat, input: &str) -> Result<Self> {
+        if input.trim().is_empty() {
+            bail!("graph input is empty");
+        }
+
+        let graph = match format {
+            GraphFormat::Json => {
+                serde_json::from_str::<Graph>(input).map_err(anyhow::Error::from)?
+            }
+            GraphFormat::Yaml => {
+                serde_yml::from_str::<Graph>(input).map_err(anyhow::Error::from)?
+            }
+            GraphFormat::Toml => toml::from_str::<Graph>(input).map_err(anyhow::Error::from)?,
+        };
+        graph.validate()?;
+
+        Ok(graph)
     }
 
     pub fn test_graph() -> Self {
@@ -184,4 +231,44 @@ impl Graph {
 fn test_graph() {
     let graph = Graph::test_graph();
     assert!(graph.validate().is_ok());
+}
+
+#[test]
+fn graph_roundtrip_json() {
+    assert_roundtrip(GraphFormat::Json);
+}
+
+#[test]
+fn graph_roundtrip_yaml() {
+    assert_roundtrip(GraphFormat::Yaml);
+}
+
+#[test]
+fn graph_roundtrip_toml() {
+    assert_roundtrip(GraphFormat::Toml);
+}
+
+fn assert_roundtrip(format: GraphFormat) {
+    let graph = Graph::test_graph();
+    let serialized = graph
+        .serialize(format)
+        .expect("graph serialization should succeed for test graph");
+    assert!(
+        !serialized.trim().is_empty(),
+        "serialized graph should not be empty"
+    );
+    let deserialized = Graph::deserialize(format, &serialized)
+        .expect("graph deserialization should succeed for test payload");
+    assert!(deserialized.validate().is_ok());
+    assert_eq!(
+        graph.nodes.len(),
+        deserialized.nodes.len(),
+        "node counts should round-trip"
+    );
+    assert_eq!(
+        graph.nodes[0].id, deserialized.nodes[0].id,
+        "node ids should round-trip"
+    );
+    assert_eq!(graph.zoom, deserialized.zoom, "zoom should round-trip");
+    assert_eq!(graph.pan, deserialized.pan, "pan should round-trip");
 }
