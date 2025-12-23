@@ -108,6 +108,9 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
     let text_color = visuals.text_color();
     let node_fill = visuals.widgets.noninteractive.bg_fill;
     let node_stroke = visuals.widgets.noninteractive.bg_stroke;
+    let heading_font = scaled_font(ui, egui::TextStyle::Heading, graph.zoom);
+    let body_font = scaled_font(ui, egui::TextStyle::Body, graph.zoom);
+    let header_text_offset = 4.0 * graph.zoom;
 
     for node in &mut graph.nodes {
         let node_size = node_size(node, &layout);
@@ -132,10 +135,10 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
         );
 
         painter.text(
-            node_rect.min + egui::vec2(layout.padding, 4.0),
+            node_rect.min + egui::vec2(layout.padding, header_text_offset),
             egui::Align2::LEFT_TOP,
             &node.name,
-            egui::TextStyle::Heading.resolve(ui.style()),
+            heading_font.clone(),
             text_color,
         );
 
@@ -149,7 +152,7 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
                 text_pos,
                 egui::Align2::LEFT_TOP,
                 &input.name,
-                egui::TextStyle::Body.resolve(ui.style()),
+                body_font.clone(),
                 text_color,
             );
         }
@@ -164,7 +167,7 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
                 text_pos,
                 egui::Align2::RIGHT_TOP,
                 &output.name,
-                egui::TextStyle::Body.resolve(ui.style()),
+                body_font.clone(),
                 text_color,
             );
         }
@@ -227,4 +230,14 @@ fn bezier_control_offset(start: egui::Pos2, end: egui::Pos2) -> f32 {
     let offset = (dx * 0.5).max(40.0);
     assert!(offset.is_finite(), "bezier control offset must be finite");
     offset
+}
+
+fn scaled_font(ui: &egui::Ui, style: egui::TextStyle, scale: f32) -> egui::FontId {
+    assert!(scale.is_finite(), "font scale must be finite");
+    assert!(scale > 0.0, "font scale must be positive");
+    let base = style.resolve(ui.style());
+    egui::FontId {
+        size: base.size * scale,
+        family: base.family.clone(),
+    }
 }
