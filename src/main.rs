@@ -112,7 +112,25 @@ impl eframe::App for ScenariumApp {
     fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
         egui::TopBottomPanel::top("top_panel").show(ctx, |ui| {
             egui::MenuBar::new().ui(ui, |ui| {
+                {
+                    let style = ui.style_mut();
+                    style.spacing.button_padding = egui::vec2(16.0, 5.0);
+                    style.spacing.item_spacing = egui::vec2(10.0, 5.0);
+                    style
+                        .text_styles
+                        .entry(egui::TextStyle::Button)
+                        .and_modify(|font| font.size = 18.0);
+                }
                 ui.menu_button("File", |ui| {
+                    {
+                        let style = ui.style_mut();
+                        style.spacing.button_padding = egui::vec2(16.0, 5.0);
+                        style.spacing.item_spacing = egui::vec2(10.0, 5.0);
+                        style
+                            .text_styles
+                            .entry(egui::TextStyle::Button)
+                            .and_modify(|font| font.size = 18.0);
+                    }
                     if ui.button("New").clicked() {
                         self.new_graph();
                         ui.close();

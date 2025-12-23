@@ -42,7 +42,7 @@ The top menu bar exposes a **File** menu with:
 - **Load**: deserializes the graph from that JSON file and replaces the current graph.
 - **Test**: loads the sample graph from `Graph::test_graph`.
 
-The app displays a short status message after each command.
+The app displays a short status message after each command, and the menu uses larger text with wider padding for easier clicking.
 
 ## Graph serialization
 
