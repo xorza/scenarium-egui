@@ -14,3 +14,13 @@ use uuid::Uuid;
 let guid = Uuid::new_v4();
 println!("{guid}");
 ```
+
+## Sample graph
+
+`Graph::test_graph` in `src/model.rs` creates a small node graph for UI rendering:
+
+- value_a (one output)
+- value_b (one output)
+- math(sum) with inputs from value_a/value_b and an output named sum
+- math(divide) with inputs from sum/value_b and an output named divide
+- output node connected to divide
