@@ -225,7 +225,13 @@ pub fn render_graph(
             .filter(|port| port.port.kind != connection_drag.start_port.kind)
             .map(|port| port.center)
             .unwrap_or(connection_drag.current_pos);
-        draw_temporary_connection(&painter, graph.zoom, connection_drag.start_pos, end_pos);
+        draw_temporary_connection(
+            &painter,
+            graph.zoom,
+            connection_drag.start_pos,
+            end_pos,
+            connection_drag.start_port.kind,
+        );
     }
 
     node::render_nodes(ui, graph);
@@ -386,14 +392,21 @@ fn draw_temporary_connection(
     scale: f32,
     start: egui::Pos2,
     end: egui::Pos2,
+    start_kind: PortKind,
 ) {
+    assert!(scale.is_finite(), "connection scale must be finite");
+    assert!(scale > 0.0, "connection scale must be positive");
     let control_offset = node::bezier_control_offset(start, end, scale);
+    let (start_sign, end_sign) = match start_kind {
+        PortKind::Output => (1.0, -1.0),
+        PortKind::Input => (-1.0, 1.0),
+    };
     let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(170, 200, 255));
     let shape = egui::epaint::CubicBezierShape::from_points_stroke(
         [
             start,
-            start + egui::vec2(control_offset, 0.0),
-            end + egui::vec2(-control_offset, 0.0),
+            start + egui::vec2(control_offset * start_sign, 0.0),
+            end + egui::vec2(control_offset * end_sign, 0.0),
             end,
         ],
         false,
