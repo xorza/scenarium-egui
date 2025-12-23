@@ -108,9 +108,12 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
     let text_color = visuals.text_color();
     let node_fill = visuals.widgets.noninteractive.bg_fill;
     let node_stroke = visuals.widgets.noninteractive.bg_stroke;
+    let selected_stroke =
+        egui::Stroke::new(node_stroke.width.max(2.0), visuals.selection.stroke.color);
     let heading_font = scaled_font(ui, egui::TextStyle::Heading, graph.zoom);
     let body_font = scaled_font(ui, egui::TextStyle::Body, graph.zoom);
     let header_text_offset = 4.0 * graph.zoom;
+    let mut selection_request = None;
 
     for node in &mut graph.nodes {
         let node_size = node_size(node, &layout);
@@ -119,6 +122,9 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
         let header_rect =
             egui::Rect::from_min_size(node_rect.min, egui::vec2(node_size.x, layout.header_height));
 
+        let node_id = ui.make_persistent_id(("node_body", node.id));
+        let body_response = ui.interact(node_rect, node_id, egui::Sense::click());
+
         let header_id = ui.make_persistent_id(("node_header", node.id));
         let response = ui.interact(header_rect, header_id, egui::Sense::drag());
 
@@ -126,11 +132,22 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
             node.pos += response.drag_delta() / graph.zoom;
         }
 
+        if response.clicked() || response.dragged() || body_response.clicked() {
+            selection_request = Some(node.id);
+        }
+
+        let selected_id = selection_request.or(graph.selected_node_id);
+        let is_selected = selected_id.is_some_and(|id| id == node.id);
+
         painter.rect(
             node_rect,
             layout.corner_radius,
             node_fill,
-            node_stroke,
+            if is_selected {
+                selected_stroke
+            } else {
+                node_stroke
+            },
             egui::StrokeKind::Inside,
         );
 
@@ -171,6 +188,10 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
                 text_color,
             );
         }
+    }
+
+    if let Some(selected_id) = selection_request {
+        graph.select_node(selected_id);
     }
 }
 

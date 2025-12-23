@@ -10,38 +10,13 @@ pub enum GraphFormat {
     Yaml,
     Json,
 }
-
-impl GraphFormat {
-    pub fn from_extension(extension: &str) -> Result<Self> {
-        let normalized = extension.trim().to_ascii_lowercase();
-        if normalized.is_empty() {
-            bail!("graph file extension is empty");
-        }
-
-        match normalized.as_str() {
-            "json" => Ok(Self::Json),
-            "yaml" | "yml" => Ok(Self::Yaml),
-            "toml" => Ok(Self::Toml),
-            _ => bail!("unsupported graph file extension: {normalized}"),
-        }
-    }
-
-    pub fn from_path(path: &Path) -> Result<Self> {
-        let extension = path
-            .extension()
-            .and_then(|value| value.to_str())
-            .ok_or_else(|| anyhow!("graph file extension is missing"))?;
-
-        Self::from_extension(extension)
-    }
-}
-
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Graph {
     pub id: Uuid,
     pub nodes: Vec<Node>,
     pub pan: egui::Vec2,
     pub zoom: f32,
+    pub selected_node_id: Option<Uuid>,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -92,6 +67,7 @@ impl Default for Graph {
             nodes: Vec::new(),
             pan: egui::Vec2::ZERO,
             zoom: 1.0,
+            selected_node_id: None,
         }
     }
 }
@@ -106,7 +82,6 @@ impl Graph {
         }
 
         let mut output_counts = HashMap::new();
-
         for node in &self.nodes {
             if !node.pos.x.is_finite() || !node.pos.y.is_finite() {
                 return Err(anyhow!("node position must be finite"));
@@ -115,6 +90,12 @@ impl Graph {
             if prior.is_some() {
                 return Err(anyhow!("duplicate node id detected"));
             }
+        }
+
+        if let Some(selected_node_id) = self.selected_node_id
+            && !output_counts.contains_key(&selected_node_id)
+        {
+            return Err(anyhow!("selected node id must exist in graph"));
         }
 
         for node in &self.nodes {
@@ -273,11 +254,45 @@ impl Graph {
             nodes: vec![value_a, value_b, sum, divide, output],
             pan: egui::Vec2::ZERO,
             zoom: 1.0,
+            selected_node_id: None,
         };
 
         assert!(graph.nodes.len() == 5, "test_graph must contain 5 nodes");
 
         graph
+    }
+
+    pub fn select_node(&mut self, node_id: Uuid) {
+        assert!(
+            self.nodes.iter().any(|node| node.id == node_id),
+            "selected node must exist in graph"
+        );
+        self.selected_node_id = Some(node_id);
+    }
+}
+
+impl GraphFormat {
+    pub fn from_extension(extension: &str) -> Result<Self> {
+        let normalized = extension.trim().to_ascii_lowercase();
+        if normalized.is_empty() {
+            bail!("graph file extension is empty");
+        }
+
+        match normalized.as_str() {
+            "json" => Ok(Self::Json),
+            "yaml" | "yml" => Ok(Self::Yaml),
+            "toml" => Ok(Self::Toml),
+            _ => bail!("unsupported graph file extension: {normalized}"),
+        }
+    }
+
+    pub fn from_path(path: &Path) -> Result<Self> {
+        let extension = path
+            .extension()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| anyhow!("graph file extension is missing"))?;
+
+        Self::from_extension(extension)
     }
 }
 
