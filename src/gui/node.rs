@@ -87,7 +87,7 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
                 let end = node_input_pos(origin, node, input_index, &layout, graph.zoom);
 
                 let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(80, 160, 255));
-                let control_offset = bezier_control_offset(start, end);
+                let control_offset = bezier_control_offset(start, end, graph.zoom);
                 let curve = egui::epaint::CubicBezierShape::from_points_stroke(
                     [
                         start,
@@ -225,9 +225,10 @@ fn node_output_pos(
     egui::pos2(origin.x + node.pos.x * scale + layout.node_width, y)
 }
 
-fn bezier_control_offset(start: egui::Pos2, end: egui::Pos2) -> f32 {
+fn bezier_control_offset(start: egui::Pos2, end: egui::Pos2, scale: f32) -> f32 {
+    assert!(scale > 0.0, "graph scale must be positive");
     let dx = (end.x - start.x).abs();
-    let offset = (dx * 0.5).max(40.0);
+    let offset = (dx * 0.5).max(40.0 * scale);
     assert!(offset.is_finite(), "bezier control offset must be finite");
     offset
 }
