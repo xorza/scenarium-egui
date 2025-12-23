@@ -1,0 +1,6 @@
+[Desktop Entry]
+Type=Application
+Name=Scenarium
+Exec=egui-playground
+Icon=scenarium-egui
+Categories=Utility;

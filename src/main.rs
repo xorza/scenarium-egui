@@ -9,12 +9,17 @@ use anyhow::Result;
 use eframe::{NativeOptions, egui};
 use std::ffi::OsStr;
 use std::path::PathBuf;
+use std::sync::Arc;
 
 fn main() -> Result<()> {
     init::init()?;
 
+    let app_icon = load_window_icon();
     let options = NativeOptions {
         renderer: eframe::Renderer::Wgpu,
+        viewport: egui::ViewportBuilder::default()
+            .with_icon(app_icon)
+            .with_app_id("scenarium-egui"),
         ..Default::default()
     };
 
@@ -25,6 +30,12 @@ fn main() -> Result<()> {
     )?;
 
     Ok(())
+}
+
+fn load_window_icon() -> Arc<egui::IconData> {
+    let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"))
+        .expect("window icon PNG should be a valid RGBA image");
+    Arc::new(icon)
 }
 
 #[derive(Debug)]

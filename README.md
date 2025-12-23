@@ -44,6 +44,23 @@ The top menu bar exposes a **File** menu with:
 
 The app displays a short status message after each command, and the menu uses larger text with wider padding for easier clicking.
 
+## Window icon
+
+The window title bar icon is loaded from `assets/icon.png` at startup and applied via egui's viewport configuration.
+
+### Wayland app_id + desktop entry
+
+Wayland compositors often ignore per-window icon hints and instead use the app ID + desktop entry to pick the icon. The app now sets the app ID to `scenarium-egui` and includes a sample desktop entry at `assets/scenarium-egui.desktop`.
+
+To see the icon on Wayland, install the desktop entry and icon into the standard locations:
+
+```bash
+mkdir -p ~/.local/share/applications
+mkdir -p ~/.local/share/icons/hicolor/256x256/apps
+cp assets/scenarium-egui.desktop ~/.local/share/applications/
+cp assets/icon.png ~/.local/share/icons/hicolor/256x256/apps/scenarium-egui.png
+```
+
 ## Graph serialization
 
 `Graph` serializes and deserializes directly (via serde) using `GraphFormat::{Toml, Yaml, Json}` in `src/model.rs`. The API validates loaded graphs and expects internal graphs to be valid before serialization. File helpers (`serialize_to_file`/`deserialize_from_file`) choose the format based on the file extension (`.toml`, `.yaml`/`.yml`, `.json`).
