@@ -1,0 +1,17 @@
+[package]
+name = "egui-playground"
+version = "0.1.0"
+edition = "2024"
+
+[dependencies]
+anyhow = "*"
+eframe = { version = "*", default-features = false, features = ["default_fonts", "wgpu"] }
+egui = "*"
+serde = { version = "*", features = ["derive"] }
+serde_json = "*"
+tokio = { version = "*", features = ["rt-multi-thread", "macros", "time"] }
+tracing = "*"
+tracing-subscriber = { version = "*", features = ["fmt", "env-filter"] }
+dotenv = "*"
+wgpu = { version = "*", features = ["metal", "vulkan", "dx12"] }
+tracing-rolling-file = { version = "*", features = ["non-blocking"] }
