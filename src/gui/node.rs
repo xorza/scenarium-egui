@@ -26,7 +26,7 @@ impl Default for NodeLayout {
 }
 
 impl NodeLayout {
-    fn assert_valid(&self) {
+    pub(crate) fn assert_valid(&self) {
         assert!(self.node_width > 0.0, "node width must be positive");
         assert!(
             self.header_height >= 0.0,
@@ -40,7 +40,7 @@ impl NodeLayout {
         );
     }
 
-    fn scaled(&self, scale: f32) -> Self {
+    pub(crate) fn scaled(&self, scale: f32) -> Self {
         assert!(scale > 0.0, "layout scale must be positive");
         assert!(scale.is_finite(), "layout scale must be finite");
 
@@ -52,6 +52,15 @@ impl NodeLayout {
             corner_radius: self.corner_radius * scale,
         }
     }
+}
+
+pub fn node_rect_for_graph(origin: egui::Pos2, node: &model::Node, scale: f32) -> egui::Rect {
+    assert!(scale > 0.0, "graph scale must be positive");
+    assert!(scale.is_finite(), "graph scale must be finite");
+    let layout = NodeLayout::default().scaled(scale);
+    layout.assert_valid();
+    let node_size = node_size(node, &layout);
+    egui::Rect::from_min_size(origin + node.pos.to_vec2() * scale, node_size)
 }
 
 pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {

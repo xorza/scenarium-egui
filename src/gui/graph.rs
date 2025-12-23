@@ -11,14 +11,31 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
     assert!(graph.zoom.is_finite(), "graph zoom must be finite");
     assert!(graph.zoom > 0.0, "graph zoom must be positive");
 
+    let pointer_pos = ui.input(|input| input.pointer.hover_pos());
+    let origin = rect.min + graph.pan;
+    let pointer_over_node = pointer_pos
+        .filter(|pos| rect.contains(*pos))
+        .is_some_and(|pos| {
+            graph
+                .nodes
+                .iter()
+                .any(|node| node::node_rect_for_graph(origin, node, graph.zoom).contains(pos))
+        });
     let pan_id = ui.make_persistent_id("graph_pan");
-    let pan_response = ui.interact(rect, pan_id, egui::Sense::drag());
+    let pan_response = ui.interact(
+        rect,
+        pan_id,
+        if pointer_over_node {
+            egui::Sense::hover()
+        } else {
+            egui::Sense::drag()
+        },
+    );
 
-    if pan_response.dragged() {
+    if pan_response.dragged() && !pointer_over_node {
         graph.pan += pan_response.drag_delta();
     }
 
-    let pointer_pos = ui.input(|input| input.pointer.hover_pos());
     let zoom_active = pointer_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
 
     if zoom_active {
