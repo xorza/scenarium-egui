@@ -64,10 +64,20 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &model::Graph) {
             let start = node_output_pos(origin, source_node, connection.output_index, &layout);
             let end = node_input_pos(origin, node, input_index, &layout);
 
-            painter.line_segment(
-                [start, end],
-                egui::Stroke::new(2.0, egui::Color32::from_rgb(80, 160, 255)),
+            let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(80, 160, 255));
+            let control_offset = bezier_control_offset(start, end);
+            let curve = egui::epaint::CubicBezierShape::from_points_stroke(
+                [
+                    start,
+                    start + egui::vec2(control_offset, 0.0),
+                    end + egui::vec2(-control_offset, 0.0),
+                    end,
+                ],
+                false,
+                egui::Color32::TRANSPARENT,
+                stroke,
             );
+            painter.add(curve);
         }
     }
 
@@ -173,4 +183,11 @@ fn node_output_pos(
         + layout.row_height * index as f32
         + layout.row_height * 0.5;
     egui::pos2(origin.x + node.pos.x + layout.node_width, y)
+}
+
+fn bezier_control_offset(start: egui::Pos2, end: egui::Pos2) -> f32 {
+    let dx = (end.x - start.x).abs();
+    let offset = (dx * 0.5).max(40.0);
+    assert!(offset.is_finite(), "bezier control offset must be finite");
+    offset
 }
