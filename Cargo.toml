@@ -9,6 +9,8 @@ eframe = { version = "*", default-features = false, features = ["default_fonts",
 egui = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
+serde_yml = "*"
+toml = "*"
 tokio = { version = "*", features = ["rt-multi-thread", "macros", "time"] }
 tracing = "*"
 tracing-subscriber = { version = "*", features = ["fmt", "env-filter"] }
