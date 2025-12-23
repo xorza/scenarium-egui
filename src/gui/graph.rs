@@ -99,11 +99,11 @@ pub fn render_graph(
     let middle_down = ui.input(|input| input.pointer.middle_down());
     let pointer_delta = ui.input(|input| input.pointer.delta());
     let input_origin = rect.min + graph.pan;
-    let port_radius = node::port_radius_for_scale(graph.zoom);
-    let port_activation = (port_radius * 1.6).max(10.0);
-    let layout = node::NodeLayout::default().scaled(graph.zoom);
-    layout.assert_valid();
-    let ports = collect_ports(graph, input_origin, &layout);
+    let input_port_radius = node::port_radius_for_scale(graph.zoom);
+    let port_activation = (input_port_radius * 1.6).max(10.0);
+    let input_layout = node::NodeLayout::default().scaled(graph.zoom);
+    input_layout.assert_valid();
+    let ports = collect_ports(graph, input_origin, &input_layout);
     let hovered_port = pointer_pos
         .filter(|pos| rect.contains(*pos))
         .and_then(|pos| find_port_near(&ports, pos, port_activation));
@@ -223,8 +223,10 @@ pub fn render_graph(
     }
 
     let render_origin = rect.min + graph.pan;
+    let render_layout = node::NodeLayout::default().scaled(graph.zoom);
+    render_layout.assert_valid();
     draw_dotted_background(&painter, rect, graph);
-    let curves = collect_connection_curves(graph, render_origin, &layout);
+    let curves = collect_connection_curves(graph, render_origin, &render_layout);
     let highlighted = if breaker.active && breaker.points.len() > 1 {
         connection_hits(&curves, &breaker.points)
     } else {
