@@ -61,6 +61,14 @@ cp assets/scenarium-egui.desktop ~/.local/share/applications/
 cp assets/icon.png ~/.local/share/icons/hicolor/256x256/apps/scenarium-egui.png
 ```
 
+## Fonts
+
+The UI uses the bundled Raleway SemiBold static font from `assets/Raleway/static/Raleway-SemiBold.ttf` as the first choice for proportional text, with egui defaults left as fallbacks.
+
+## Text colors
+
+The app overrides the global egui text color to a brighter tint for all labels.
+
 ## Graph serialization
 
 `Graph` serializes and deserializes directly (via serde) using `GraphFormat::{Toml, Yaml, Json}` in `src/model.rs`. The API validates loaded graphs and expects internal graphs to be valid before serialization. File helpers (`serialize_to_file`/`deserialize_from_file`) choose the format based on the file extension (`.toml`, `.yaml`/`.yml`, `.json`).

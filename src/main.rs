@@ -26,7 +26,11 @@ fn main() -> Result<()> {
     eframe::run_native(
         "Scenarium",
         options,
-        Box::new(|_cc| Ok(Box::new(ScenariumApp::default()))),
+        Box::new(|cc| {
+            configure_fonts(&cc.egui_ctx);
+            configure_visuals(&cc.egui_ctx);
+            Ok(Box::new(ScenariumApp::default()))
+        }),
     )?;
 
     Ok(())
@@ -36,6 +40,28 @@ fn load_window_icon() -> Arc<egui::IconData> {
     let icon = eframe::icon_data::from_png_bytes(include_bytes!("../assets/icon.png"))
         .expect("window icon PNG should be a valid RGBA image");
     Arc::new(icon)
+}
+
+fn configure_fonts(ctx: &egui::Context) {
+    let mut fonts = egui::FontDefinitions::default();
+    let font_data = egui::FontData::from_static(include_bytes!("../assets/Raleway-Medium.ttf"));
+    fonts
+        .font_data
+        .insert("Raleway".to_owned(), Arc::new(font_data));
+
+    let proportional = fonts
+        .families
+        .get_mut(&egui::FontFamily::Proportional)
+        .expect("proportional font family should exist in default font definitions");
+    proportional.insert(0, "Raleway".to_owned());
+
+    ctx.set_fonts(fonts);
+}
+
+fn configure_visuals(ctx: &egui::Context) {
+    let mut style = (*ctx.style()).clone();
+    style.visuals.override_text_color = Some(egui::Color32::from_rgb(200, 200, 200));
+    ctx.set_style(style);
 }
 
 #[derive(Debug)]
