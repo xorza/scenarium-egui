@@ -48,7 +48,7 @@ impl eframe::App for ScenariumApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            gui::node::render_graph(ui, &mut self.graph);
+            gui::graph::render_graph(ui, &mut self.graph);
         });
     }
 }
