@@ -38,6 +38,7 @@ impl GraphFormat {
 
 #[derive(Debug, Serialize, Deserialize)]
 pub struct Graph {
+    pub id: Uuid,
     pub nodes: Vec<Node>,
     pub pan: egui::Vec2,
     pub zoom: f32,
@@ -80,6 +81,17 @@ impl Default for Node {
             pos: egui::Pos2::ZERO,
             inputs: Vec::new(),
             outputs: Vec::new(),
+        }
+    }
+}
+
+impl Default for Graph {
+    fn default() -> Self {
+        Self {
+            id: Uuid::new_v4(),
+            nodes: Vec::new(),
+            pan: egui::Vec2::ZERO,
+            zoom: 1.0,
         }
     }
 }
@@ -257,6 +269,7 @@ impl Graph {
         };
 
         let graph = Self {
+            id: Uuid::new_v4(),
             nodes: vec![value_a, value_b, sum, divide, output],
             pan: egui::Vec2::ZERO,
             zoom: 1.0,
