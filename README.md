@@ -33,6 +33,17 @@ The egui app renders the sample graph via `src/gui/graph.rs`, which draws a tran
 
 Startup initialization (dotenv + tracing) lives in `src/init.rs`.
 
+## Main menu
+
+The top menu bar exposes a **File** menu with:
+
+- **New**: resets to an empty graph (`Graph::default`).
+- **Save**: serializes the current graph to a JSON file in the system temp directory (`scenarium-graph.json`).
+- **Load**: deserializes the graph from that JSON file and replaces the current graph.
+- **Test**: loads the sample graph from `Graph::test_graph`.
+
+The app displays a short status message after each command.
+
 ## Graph serialization
 
 `Graph` serializes and deserializes directly (via serde) using `GraphFormat::{Toml, Yaml, Json}` in `src/model.rs`. The API validates loaded graphs and expects internal graphs to be valid before serialization. File helpers (`serialize_to_file`/`deserialize_from_file`) choose the format based on the file extension (`.toml`, `.yaml`/`.yml`, `.json`).
