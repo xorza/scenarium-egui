@@ -15,7 +15,7 @@ struct ConnectionKey {
 }
 
 #[derive(Debug, Default)]
-pub struct ConnectionBreaker {
+struct ConnectionBreaker {
     pub active: bool,
     pub points: Vec<egui::Pos2>,
 }
@@ -47,7 +47,7 @@ struct PortInfo {
 }
 
 #[derive(Debug)]
-pub struct ConnectionDrag {
+struct ConnectionDrag {
     pub active: bool,
     start_port: PortRef,
     start_pos: egui::Pos2,
@@ -83,202 +83,217 @@ impl ConnectionDrag {
     }
 }
 
-pub fn render_graph(
-    ui: &mut egui::Ui,
-    graph: &mut model::Graph,
-    breaker: &mut ConnectionBreaker,
-    connection_drag: &mut ConnectionDrag,
-) {
-    let rect = ui.available_rect_before_wrap();
-    let painter = ui.painter_at(rect);
-    assert!(graph.zoom.is_finite(), "graph zoom must be finite");
-    assert!(graph.zoom > 0.0, "graph zoom must be positive");
+#[derive(Debug, Default)]
+pub struct GraphUi {
+    connection_breaker: ConnectionBreaker,
+    connection_drag: ConnectionDrag,
+}
 
-    let pointer_pos = ui.input(|input| input.pointer.hover_pos());
-    let pointer_in_rect = pointer_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
-    let middle_down = ui.input(|input| input.pointer.middle_down());
-    let pointer_delta = ui.input(|input| input.pointer.delta());
-    let input_origin = rect.min + graph.pan;
-    let input_port_radius = node::port_radius_for_scale(graph.zoom);
-    let port_activation = (input_port_radius * 1.6).max(10.0);
-    let input_layout = node::NodeLayout::default().scaled(graph.zoom);
-    input_layout.assert_valid();
-    let ports = collect_ports(graph, input_origin, &input_layout);
-    let hovered_port = pointer_pos
-        .filter(|pos| rect.contains(*pos))
-        .and_then(|pos| find_port_near(&ports, pos, port_activation));
-    let hovered_port_ref = hovered_port.as_ref();
-    let pointer_over_node = pointer_pos
-        .filter(|pos| rect.contains(*pos))
-        .is_some_and(|pos| {
-            graph.nodes.iter().any(|node| {
-                let node_rect = node::node_rect_for_graph(input_origin, node, graph.zoom);
-                node_rect.contains(pos)
-            })
-        });
-    let pan_id = ui.make_persistent_id("graph_pan");
-    let pan_response = ui.interact(
-        rect,
-        pan_id,
-        if breaker.active || connection_drag.active || pointer_over_node || hovered_port.is_some() {
-            egui::Sense::hover()
-        } else {
-            egui::Sense::drag()
-        },
-    );
-
-    if pan_response.dragged_by(egui::PointerButton::Primary)
-        && !pointer_over_node
-        && !breaker.active
-        && !connection_drag.active
-    {
-        graph.pan += pan_response.drag_delta();
-    }
-    if middle_down && pointer_in_rect && !breaker.active && !connection_drag.active {
-        assert!(
-            pointer_delta.x.is_finite(),
-            "pointer delta x must be finite"
-        );
-        assert!(
-            pointer_delta.y.is_finite(),
-            "pointer delta y must be finite"
-        );
-        graph.pan += pointer_delta;
+impl GraphUi {
+    pub fn reset(&mut self) {
+        self.connection_breaker.reset();
+        self.connection_drag.reset();
     }
 
-    let primary_pressed = ui.input(|input| input.pointer.primary_pressed());
-    let primary_down = ui.input(|input| input.pointer.primary_down());
-    let primary_released = ui.input(|input| input.pointer.primary_released());
+    pub fn render(&mut self, ui: &mut egui::Ui, graph: &mut model::Graph) {
+        let breaker = &mut self.connection_breaker;
+        let connection_drag = &mut self.connection_drag;
 
-    if !breaker.active
-        && !connection_drag.active
-        && primary_pressed
-        && pointer_in_rect
-        && !pointer_over_node
-        && hovered_port.is_none()
-    {
-        breaker.active = true;
-        breaker.points.clear();
-        if let Some(pos) = pointer_pos {
-            breaker.points.push(pos);
+        let rect = ui.available_rect_before_wrap();
+        let painter = ui.painter_at(rect);
+        assert!(graph.zoom.is_finite(), "graph zoom must be finite");
+        assert!(graph.zoom > 0.0, "graph zoom must be positive");
+
+        let pointer_pos = ui.input(|input| input.pointer.hover_pos());
+        let pointer_in_rect = pointer_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
+        let middle_down = ui.input(|input| input.pointer.middle_down());
+        let pointer_delta = ui.input(|input| input.pointer.delta());
+        let input_origin = rect.min + graph.pan;
+        let input_port_radius = node::port_radius_for_scale(graph.zoom);
+        let port_activation = (input_port_radius * 1.6).max(10.0);
+        let input_layout = node::NodeLayout::default().scaled(graph.zoom);
+        input_layout.assert_valid();
+        let ports = collect_ports(graph, input_origin, &input_layout);
+        let hovered_port = pointer_pos
+            .filter(|pos| rect.contains(*pos))
+            .and_then(|pos| find_port_near(&ports, pos, port_activation));
+        let hovered_port_ref = hovered_port.as_ref();
+        let pointer_over_node = pointer_pos
+            .filter(|pos| rect.contains(*pos))
+            .is_some_and(|pos| {
+                graph.nodes.iter().any(|node| {
+                    let node_rect = node::node_rect_for_graph(input_origin, node, graph.zoom);
+                    node_rect.contains(pos)
+                })
+            });
+        let pan_id = ui.make_persistent_id("graph_pan");
+        let pan_response = ui.interact(
+            rect,
+            pan_id,
+            if breaker.active
+                || connection_drag.active
+                || pointer_over_node
+                || hovered_port.is_some()
+            {
+                egui::Sense::hover()
+            } else {
+                egui::Sense::drag()
+            },
+        );
+
+        if pan_response.dragged_by(egui::PointerButton::Primary)
+            && !pointer_over_node
+            && !breaker.active
+            && !connection_drag.active
+        {
+            graph.pan += pan_response.drag_delta();
         }
-    }
+        if middle_down && pointer_in_rect && !breaker.active && !connection_drag.active {
+            assert!(
+                pointer_delta.x.is_finite(),
+                "pointer delta x must be finite"
+            );
+            assert!(
+                pointer_delta.y.is_finite(),
+                "pointer delta y must be finite"
+            );
+            graph.pan += pointer_delta;
+        }
 
-    if !breaker.active
-        && !connection_drag.active
-        && primary_pressed
-        && pointer_in_rect
-        && let Some(port) = hovered_port_ref
-    {
-        connection_drag.start(port.clone());
-    }
+        let primary_pressed = ui.input(|input| input.pointer.primary_pressed());
+        let primary_down = ui.input(|input| input.pointer.primary_down());
+        let primary_released = ui.input(|input| input.pointer.primary_released());
 
-    if breaker.active
-        && primary_down
-        && let Some(pos) = pointer_pos
-    {
-        let should_add = breaker
-            .points
-            .last()
-            .map(|last| last.distance(pos) > 2.0)
-            .unwrap_or(true);
-        if should_add {
-            let remaining = MAX_BREAKER_LENGTH - breaker_path_length(&breaker.points);
-            let last_pos = breaker.points.last().copied().unwrap_or(pos);
-            let segment_len = last_pos.distance(pos);
-            if remaining > 0.0 && segment_len > 0.0 {
-                if segment_len <= remaining {
-                    breaker.points.push(pos);
-                } else {
-                    let t = remaining / segment_len;
-                    let clamped = egui::pos2(
-                        last_pos.x + (pos.x - last_pos.x) * t,
-                        last_pos.y + (pos.y - last_pos.y) * t,
-                    );
-                    breaker.points.push(clamped);
+        if !breaker.active
+            && !connection_drag.active
+            && primary_pressed
+            && pointer_in_rect
+            && !pointer_over_node
+            && hovered_port.is_none()
+        {
+            breaker.active = true;
+            breaker.points.clear();
+            if let Some(pos) = pointer_pos {
+                breaker.points.push(pos);
+            }
+        }
+
+        if !breaker.active
+            && !connection_drag.active
+            && primary_pressed
+            && pointer_in_rect
+            && let Some(port) = hovered_port_ref
+        {
+            connection_drag.start(port.clone());
+        }
+
+        if breaker.active
+            && primary_down
+            && let Some(pos) = pointer_pos
+        {
+            let should_add = breaker
+                .points
+                .last()
+                .map(|last| last.distance(pos) > 2.0)
+                .unwrap_or(true);
+            if should_add {
+                let remaining = MAX_BREAKER_LENGTH - breaker_path_length(&breaker.points);
+                let last_pos = breaker.points.last().copied().unwrap_or(pos);
+                let segment_len = last_pos.distance(pos);
+                if remaining > 0.0 && segment_len > 0.0 {
+                    if segment_len <= remaining {
+                        breaker.points.push(pos);
+                    } else {
+                        let t = remaining / segment_len;
+                        let clamped = egui::pos2(
+                            last_pos.x + (pos.x - last_pos.x) * t,
+                            last_pos.y + (pos.y - last_pos.y) * t,
+                        );
+                        breaker.points.push(clamped);
+                    }
                 }
             }
         }
-    }
 
-    let zoom_active = pointer_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
+        let zoom_active = pointer_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
 
-    if zoom_active {
-        let mut zoom_delta = ui.input(|input| input.zoom_delta());
-        let scroll_delta = ui.input(|input| input.smooth_scroll_delta.y);
-        if scroll_delta.abs() > f32::EPSILON {
-            let scroll_zoom = (scroll_delta * 0.002).exp();
-            assert!(scroll_zoom.is_finite(), "scroll zoom factor must be finite");
-            zoom_delta *= scroll_zoom;
-        }
-        if (zoom_delta - 1.0).abs() > f32::EPSILON {
-            let clamped_zoom = (graph.zoom * zoom_delta).clamp(MIN_ZOOM, MAX_ZOOM);
-            assert!(clamped_zoom.is_finite(), "clamped zoom must be finite");
+        if zoom_active {
+            let mut zoom_delta = ui.input(|input| input.zoom_delta());
+            let scroll_delta = ui.input(|input| input.smooth_scroll_delta.y);
+            if scroll_delta.abs() > f32::EPSILON {
+                let scroll_zoom = (scroll_delta * 0.002).exp();
+                assert!(scroll_zoom.is_finite(), "scroll zoom factor must be finite");
+                zoom_delta *= scroll_zoom;
+            }
+            if (zoom_delta - 1.0).abs() > f32::EPSILON {
+                let clamped_zoom = (graph.zoom * zoom_delta).clamp(MIN_ZOOM, MAX_ZOOM);
+                assert!(clamped_zoom.is_finite(), "clamped zoom must be finite");
 
-            if (clamped_zoom - graph.zoom).abs() > f32::EPSILON {
-                let cursor = pointer_pos.unwrap_or_else(|| rect.center());
-                let origin = rect.min;
-                let graph_pos = (cursor - origin - graph.pan) / graph.zoom;
+                if (clamped_zoom - graph.zoom).abs() > f32::EPSILON {
+                    let cursor = pointer_pos.unwrap_or_else(|| rect.center());
+                    let origin = rect.min;
+                    let graph_pos = (cursor - origin - graph.pan) / graph.zoom;
 
-                graph.zoom = clamped_zoom;
-                graph.pan = cursor - origin - graph_pos * graph.zoom;
+                    graph.zoom = clamped_zoom;
+                    graph.pan = cursor - origin - graph_pos * graph.zoom;
+                }
             }
         }
-    }
 
-    let render_origin = rect.min + graph.pan;
-    let render_layout = node::NodeLayout::default().scaled(graph.zoom);
-    render_layout.assert_valid();
-    draw_dotted_background(&painter, rect, graph);
-    let curves = collect_connection_curves(graph, render_origin, &render_layout);
-    let highlighted = if breaker.active && breaker.points.len() > 1 {
-        connection_hits(&curves, &breaker.points)
-    } else {
-        HashSet::new()
-    };
-    draw_connections(&painter, &curves, &highlighted);
+        let render_origin = rect.min + graph.pan;
+        let render_layout = node::NodeLayout::default().scaled(graph.zoom);
+        render_layout.assert_valid();
+        draw_dotted_background(&painter, rect, graph);
+        let curves = collect_connection_curves(graph, render_origin, &render_layout);
+        let highlighted = if breaker.active && breaker.points.len() > 1 {
+            connection_hits(&curves, &breaker.points)
+        } else {
+            HashSet::new()
+        };
+        draw_connections(&painter, &curves, &highlighted);
 
-    if breaker.active && breaker.points.len() > 1 {
-        let breaker_stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(255, 120, 120));
-        painter.add(egui::Shape::line(breaker.points.clone(), breaker_stroke));
-    }
-
-    if connection_drag.active {
-        if let Some(pos) = pointer_pos {
-            connection_drag.current_pos = pos;
+        if breaker.active && breaker.points.len() > 1 {
+            let breaker_stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(255, 120, 120));
+            painter.add(egui::Shape::line(breaker.points.clone(), breaker_stroke));
         }
-        let end_pos = hovered_port_ref
-            .filter(|port| port.port.kind != connection_drag.start_port.kind)
-            .map(|port| port.center)
-            .unwrap_or(connection_drag.current_pos);
-        draw_temporary_connection(
-            &painter,
-            graph.zoom,
-            connection_drag.start_pos,
-            end_pos,
-            connection_drag.start_port.kind,
-        );
-    }
 
-    node::render_nodes(ui, graph);
-
-    if breaker.active && primary_released {
-        remove_connections(graph, &highlighted);
-        breaker.reset();
-    }
-
-    if connection_drag.active && primary_released {
-        if let Some(target) = hovered_port_ref
-            && target.port.kind != connection_drag.start_port.kind
-            && port_in_activation_range(
-                &connection_drag.current_pos,
-                target.center,
-                port_activation,
-            )
-        {
-            apply_connection(graph, connection_drag.start_port, target.port);
+        if connection_drag.active {
+            if let Some(pos) = pointer_pos {
+                connection_drag.current_pos = pos;
+            }
+            let end_pos = hovered_port_ref
+                .filter(|port| port.port.kind != connection_drag.start_port.kind)
+                .map(|port| port.center)
+                .unwrap_or(connection_drag.current_pos);
+            draw_temporary_connection(
+                &painter,
+                graph.zoom,
+                connection_drag.start_pos,
+                end_pos,
+                connection_drag.start_port.kind,
+            );
         }
-        connection_drag.reset();
+
+        node::render_nodes(ui, graph);
+
+        if breaker.active && primary_released {
+            remove_connections(graph, &highlighted);
+            breaker.reset();
+        }
+
+        if connection_drag.active && primary_released {
+            if let Some(target) = hovered_port_ref
+                && target.port.kind != connection_drag.start_port.kind
+                && port_in_activation_range(
+                    &connection_drag.current_pos,
+                    target.center,
+                    port_activation,
+                )
+            {
+                apply_connection(graph, connection_drag.start_port, target.port);
+            }
+            connection_drag.reset();
+        }
     }
 }
 

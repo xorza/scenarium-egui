@@ -32,8 +32,7 @@ struct ScenariumApp {
     graph: model::Graph,
     graph_path: PathBuf,
     last_status: Option<String>,
-    connection_breaker: gui::graph::ConnectionBreaker,
-    connection_drag: gui::graph::ConnectionDrag,
+    graph_ui: gui::graph::GraphUi,
 }
 
 impl Default for ScenariumApp {
@@ -48,18 +47,17 @@ impl Default for ScenariumApp {
             graph,
             graph_path,
             last_status: None,
-            connection_breaker: gui::graph::ConnectionBreaker::default(),
-            connection_drag: gui::graph::ConnectionDrag::default(),
+            graph_ui: gui::graph::GraphUi::default(),
         }
     }
 }
 
 impl ScenariumApp {
     fn default_graph_path() -> PathBuf {
-        let path = std::env::temp_dir().join("scenarium-graph.json");
+        let path = std::env::temp_dir().join("scenarium-graph.yml");
         assert!(
-            path.extension() == Some(OsStr::new("json")),
-            "default graph path must use a .json extension"
+            path.extension() == Some(OsStr::new("yml")),
+            "default graph path must use a .yml extension"
         );
         path
     }
@@ -73,8 +71,7 @@ impl ScenariumApp {
             .validate()
             .expect("graph should be valid before storing in app state");
         self.graph = graph;
-        self.connection_breaker.reset();
-        self.connection_drag.reset();
+        self.graph_ui.reset();
         self.set_status(status);
     }
 
@@ -164,12 +161,7 @@ impl eframe::App for ScenariumApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            gui::graph::render_graph(
-                ui,
-                &mut self.graph,
-                &mut self.connection_breaker,
-                &mut self.connection_drag,
-            );
+            self.graph_ui.render(ui, &mut self.graph);
         });
     }
 }
