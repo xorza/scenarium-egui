@@ -303,32 +303,13 @@ fn test_graph() {
 }
 
 #[test]
-fn graph_roundtrip_json() {
+fn graph_roundtrip() {
     assert_roundtrip(GraphFormat::Json);
-}
-
-#[test]
-fn graph_roundtrip_yaml() {
     assert_roundtrip(GraphFormat::Yaml);
-}
-
-#[test]
-fn graph_roundtrip_toml() {
     assert_roundtrip(GraphFormat::Toml);
-}
 
-#[test]
-fn graph_file_roundtrip_json() {
     assert_file_roundtrip(GraphFormat::Json, "json");
-}
-
-#[test]
-fn graph_file_roundtrip_yaml() {
     assert_file_roundtrip(GraphFormat::Yaml, "yaml");
-}
-
-#[test]
-fn graph_file_roundtrip_toml() {
     assert_file_roundtrip(GraphFormat::Toml, "toml");
 }
 
