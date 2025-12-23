@@ -29,4 +29,6 @@ println!("{guid}");
 
 ## Graph rendering
 
-The egui app renders the sample graph by drawing node rectangles, labels, and connection lines in the central panel painter.
+The egui app renders the sample graph by drawing node rectangles, labels, and connection lines via `src/gui/node.rs`.
+
+Startup initialization (dotenv + tracing) lives in `src/init.rs`.
