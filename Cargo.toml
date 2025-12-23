@@ -4,9 +4,12 @@ version = "0.1.0"
 edition = "2024"
 
 [dependencies]
-anyhow = "*"
+# wgpu version should be in sync with egui
+wgpu = { version = "27.0", features = ["metal", "vulkan", "dx12"] }
 eframe = { version = "0.33", default-features = false, features = ["default_fonts", "wgpu", "wayland"] }
 egui = { version = "0.33", default-features = false, features = ["default_fonts", "rayon"] }
+
+anyhow = "*"
 serde = { version = "*", features = ["derive"] }
 serde_json = "*"
 serde_yml = "*"
@@ -16,6 +19,5 @@ tokio = { version = "*", features = ["rt-multi-thread", "macros", "time"] }
 tracing = "*"
 tracing-subscriber = { version = "*", features = ["fmt", "env-filter"] }
 dotenv = "*"
-wgpu = { version = "27.0", features = ["metal", "vulkan", "dx12"] }
 tracing-rolling-file = { version = "*", features = ["non-blocking"] }
 uuid = { version = "*", features = ["v4"] }
