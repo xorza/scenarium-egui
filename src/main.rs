@@ -1,6 +1,7 @@
 use anyhow::Result;
 use eframe::{NativeOptions, egui};
 use tracing_rolling_file::RollingFileAppenderBase;
+use uuid::Uuid;
 
 fn main() -> Result<()> {
     std::fs::create_dir_all("log")?;
@@ -36,6 +37,7 @@ struct PlaygroundApp {
     value: f32,
     label: String,
     window_open: bool,
+    last_generated_id: Uuid,
 }
 
 impl Default for PlaygroundApp {
@@ -44,6 +46,7 @@ impl Default for PlaygroundApp {
             value: 42.0,
             label: String::new(),
             window_open: true,
+            last_generated_id: Uuid::new_v4(),
         }
     }
 }
@@ -61,6 +64,11 @@ impl eframe::App for PlaygroundApp {
                     .speed(0.1)
                     .prefix("value: "),
             );
+            ui.add_space(12.0);
+            if ui.button("Generate GUID").clicked() {
+                self.last_generated_id = Uuid::new_v4();
+            }
+            ui.label(format!("Current GUID: {}", self.last_generated_id));
         });
 
         egui::Window::new("Draggable Widget Window")

@@ -15,3 +15,4 @@ tracing-subscriber = { version = "*", features = ["fmt", "env-filter"] }
 dotenv = "*"
 wgpu = { version = "*", features = ["metal", "vulkan", "dx12"] }
 tracing-rolling-file = { version = "*", features = ["non-blocking"] }
+uuid = { version = "1", features = ["v4"] }
