@@ -24,3 +24,5 @@ println!("{guid}");
 - math(sum) with inputs from value_a/value_b and an output named sum
 - math(divide) with inputs from sum/value_b and an output named divide
 - output node connected to divide
+
+`Graph::validate` returns a `Result` if any connection references a missing node or an invalid output index.

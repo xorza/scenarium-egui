@@ -1,3 +1,5 @@
+use anyhow::{Result, anyhow};
+use std::collections::HashMap;
 use uuid::Uuid;
 
 #[derive(Debug)]
@@ -47,6 +49,32 @@ impl Default for Node {
 }
 
 impl Graph {
+    pub fn validate(&self) -> Result<()> {
+        let mut output_counts = HashMap::new();
+
+        for node in &self.nodes {
+            let prior = output_counts.insert(node.id, node.outputs.len());
+            if prior.is_some() {
+                return Err(anyhow!("duplicate node id detected"));
+            }
+        }
+
+        for node in &self.nodes {
+            for input in &node.inputs {
+                if let Some(connection) = &input.connection {
+                    let output_count = output_counts
+                        .get(&connection.node_id)
+                        .ok_or_else(|| anyhow!("connection references a missing node"))?;
+                    if connection.output_index >= *output_count {
+                        return Err(anyhow!("connection output index out of range"));
+                    }
+                }
+            }
+        }
+
+        Ok(())
+    }
+
     pub fn test_graph() -> Self {
         let value_a_id = Uuid::new_v4();
         let value_b_id = Uuid::new_v4();
@@ -146,4 +174,10 @@ impl Graph {
 
         graph
     }
+}
+
+#[test]
+fn test_graph() {
+    let graph = Graph::test_graph();
+    assert!(graph.validate().is_ok());
 }
