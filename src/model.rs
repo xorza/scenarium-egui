@@ -1,13 +1,39 @@
 use anyhow::{Result, anyhow, bail};
 use serde::{Deserialize, Serialize};
 use std::collections::HashMap;
+use std::path::Path;
 use uuid::Uuid;
 
-#[derive(Debug, Clone, Copy)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum GraphFormat {
     Toml,
     Yaml,
     Json,
+}
+
+impl GraphFormat {
+    pub fn from_extension(extension: &str) -> Result<Self> {
+        let normalized = extension.trim().to_ascii_lowercase();
+        if normalized.is_empty() {
+            bail!("graph file extension is empty");
+        }
+
+        match normalized.as_str() {
+            "json" => Ok(Self::Json),
+            "yaml" | "yml" => Ok(Self::Yaml),
+            "toml" => Ok(Self::Toml),
+            _ => bail!("unsupported graph file extension: {normalized}"),
+        }
+    }
+
+    pub fn from_path(path: &Path) -> Result<Self> {
+        let extension = path
+            .extension()
+            .and_then(|value| value.to_str())
+            .ok_or_else(|| anyhow!("graph file extension is missing"))?;
+
+        Self::from_extension(extension)
+    }
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -122,6 +148,21 @@ impl Graph {
         graph.validate()?;
 
         Ok(graph)
+    }
+
+    pub fn serialize_to_file<P: AsRef<Path>>(&self, path: P) -> Result<()> {
+        let path = path.as_ref();
+        let format = GraphFormat::from_path(path)?;
+        let payload = self.serialize(format)?;
+        std::fs::write(path, payload).map_err(anyhow::Error::from)
+    }
+
+    pub fn deserialize_from_file<P: AsRef<Path>>(path: P) -> Result<Self> {
+        let path = path.as_ref();
+        let format = GraphFormat::from_path(path)?;
+        let payload = std::fs::read_to_string(path).map_err(anyhow::Error::from)?;
+
+        Self::deserialize(format, &payload)
     }
 
     pub fn test_graph() -> Self {
@@ -248,6 +289,21 @@ fn graph_roundtrip_toml() {
     assert_roundtrip(GraphFormat::Toml);
 }
 
+#[test]
+fn graph_file_roundtrip_json() {
+    assert_file_roundtrip(GraphFormat::Json, "json");
+}
+
+#[test]
+fn graph_file_roundtrip_yaml() {
+    assert_file_roundtrip(GraphFormat::Yaml, "yaml");
+}
+
+#[test]
+fn graph_file_roundtrip_toml() {
+    assert_file_roundtrip(GraphFormat::Toml, "toml");
+}
+
 fn assert_roundtrip(format: GraphFormat) {
     let graph = Graph::test_graph();
     let serialized = graph
@@ -271,4 +327,31 @@ fn assert_roundtrip(format: GraphFormat) {
     );
     assert_eq!(graph.zoom, deserialized.zoom, "zoom should round-trip");
     assert_eq!(graph.pan, deserialized.pan, "pan should round-trip");
+}
+
+fn assert_file_roundtrip(format: GraphFormat, extension: &str) {
+    let graph = Graph::test_graph();
+    let detected =
+        GraphFormat::from_extension(extension).expect("file extension must map to a graph format");
+    assert_eq!(
+        detected, format,
+        "file extension must match the expected format"
+    );
+    let file_name = format!("egui-graph-{}.{}", Uuid::new_v4(), extension);
+    let path = std::env::temp_dir().join(file_name);
+
+    graph
+        .serialize_to_file(&path)
+        .expect("graph serialization to file should succeed");
+    assert!(path.exists(), "serialized graph file should exist");
+
+    let deserialized = Graph::deserialize_from_file(&path)
+        .expect("graph deserialization from file should succeed");
+    assert_eq!(
+        graph.nodes.len(),
+        deserialized.nodes.len(),
+        "node counts should round-trip from file"
+    );
+
+    std::fs::remove_file(&path).expect("temporary graph file should be removable");
 }

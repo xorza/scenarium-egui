@@ -35,7 +35,7 @@ Startup initialization (dotenv + tracing) lives in `src/init.rs`.
 
 ## Graph serialization
 
-`Graph` serializes and deserializes directly (via serde) using `GraphFormat::{Toml, Yaml, Json}` in `src/model.rs`. The API validates loaded graphs and expects internal graphs to be valid before serialization.
+`Graph` serializes and deserializes directly (via serde) using `GraphFormat::{Toml, Yaml, Json}` in `src/model.rs`. The API validates loaded graphs and expects internal graphs to be valid before serialization. File helpers (`serialize_to_file`/`deserialize_from_file`) choose the format based on the file extension (`.toml`, `.yaml`/`.yml`, `.json`).
 
 ## WGPU backend features
 
