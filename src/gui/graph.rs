@@ -171,6 +171,7 @@ impl GraphUi {
             && !pointer_over_node
             && hovered_port.is_none()
         {
+            graph.selected_node_id = None;
             breaker.active = true;
             breaker.points.clear();
             if let Some(pos) = pointer_pos {
