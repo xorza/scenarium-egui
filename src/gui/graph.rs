@@ -6,6 +6,7 @@ use uuid::Uuid;
 
 const MIN_ZOOM: f32 = 0.2;
 const MAX_ZOOM: f32 = 4.0;
+const MAX_BREAKER_LENGTH: f32 = 900.0;
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 struct ConnectionKey {
@@ -83,7 +84,21 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph, breaker: &mut C
             .map(|last| last.distance(pos) > 2.0)
             .unwrap_or(true);
         if should_add {
-            breaker.points.push(pos);
+            let remaining = MAX_BREAKER_LENGTH - breaker_path_length(&breaker.points);
+            let last_pos = breaker.points.last().copied().unwrap_or(pos);
+            let segment_len = last_pos.distance(pos);
+            if remaining > 0.0 && segment_len > 0.0 {
+                if segment_len <= remaining {
+                    breaker.points.push(pos);
+                } else {
+                    let t = remaining / segment_len;
+                    let clamped = egui::pos2(
+                        last_pos.x + (pos.x - last_pos.x) * t,
+                        last_pos.y + (pos.y - last_pos.y) * t,
+                    );
+                    breaker.points.push(clamped);
+                }
+            }
         }
     }
 
@@ -349,4 +364,11 @@ fn remove_connections(graph: &mut model::Graph, highlighted: &HashSet<Connection
 fn port_offset_for_scale(scale: f32) -> f32 {
     let radius = (5.5 * scale).clamp(3.0, 7.5);
     radius * 0.8
+}
+
+fn breaker_path_length(points: &[egui::Pos2]) -> f32 {
+    points
+        .windows(2)
+        .map(|pair| pair[0].distance(pair[1]))
+        .sum()
 }
