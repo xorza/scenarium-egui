@@ -1,5 +1,3 @@
-use std::collections::HashMap;
-
 use eframe::egui;
 
 use crate::model;
@@ -63,7 +61,7 @@ pub fn node_rect_for_graph(origin: egui::Pos2, node: &model::Node, scale: f32) -
     egui::Rect::from_min_size(origin + node.pos.to_vec2() * scale, node_size)
 }
 
-pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
+pub fn render_nodes(ui: &mut egui::Ui, graph: &mut model::Graph) {
     let rect = ui.available_rect_before_wrap();
     let painter = ui.painter_at(rect);
     let origin = rect.min + graph.pan;
@@ -72,46 +70,6 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph) {
     layout.assert_valid();
     assert!(graph.zoom > 0.0, "graph zoom must be positive");
     assert!(graph.zoom.is_finite(), "graph zoom must be finite");
-
-    {
-        let node_lookup: HashMap<_, _> = graph.nodes.iter().map(|node| (node.id, node)).collect();
-
-        for node in &graph.nodes {
-            for (input_index, input) in node.inputs.iter().enumerate() {
-                let Some(connection) = &input.connection else {
-                    continue;
-                };
-
-                let source_node = node_lookup
-                    .get(&connection.node_id)
-                    .expect("graph validation must guarantee source nodes exist");
-
-                let start = node_output_pos(
-                    origin,
-                    source_node,
-                    connection.output_index,
-                    &layout,
-                    graph.zoom,
-                );
-                let end = node_input_pos(origin, node, input_index, &layout, graph.zoom);
-
-                let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(80, 160, 255));
-                let control_offset = bezier_control_offset(start, end, graph.zoom);
-                let curve = egui::epaint::CubicBezierShape::from_points_stroke(
-                    [
-                        start,
-                        start + egui::vec2(control_offset, 0.0),
-                        end + egui::vec2(-control_offset, 0.0),
-                        end,
-                    ],
-                    false,
-                    egui::Color32::TRANSPARENT,
-                    stroke,
-                );
-                painter.add(curve);
-            }
-        }
-    }
 
     let visuals = ui.visuals();
     let text_color = visuals.text_color();
@@ -249,7 +207,7 @@ fn node_size(node: &model::Node, layout: &NodeLayout) -> egui::Vec2 {
     egui::vec2(layout.node_width, height)
 }
 
-fn node_input_pos(
+pub(crate) fn node_input_pos(
     origin: egui::Pos2,
     node: &model::Node,
     index: usize,
@@ -270,7 +228,7 @@ fn node_input_pos(
     egui::pos2(origin.x + node.pos.x * scale, y)
 }
 
-fn node_output_pos(
+pub(crate) fn node_output_pos(
     origin: egui::Pos2,
     node: &model::Node,
     index: usize,
@@ -291,7 +249,7 @@ fn node_output_pos(
     egui::pos2(origin.x + node.pos.x * scale + layout.node_width, y)
 }
 
-fn bezier_control_offset(start: egui::Pos2, end: egui::Pos2, scale: f32) -> f32 {
+pub(crate) fn bezier_control_offset(start: egui::Pos2, end: egui::Pos2, scale: f32) -> f32 {
     assert!(scale > 0.0, "graph scale must be positive");
     let dx = (end.x - start.x).abs();
     let offset = (dx * 0.5).max(40.0 * scale);
