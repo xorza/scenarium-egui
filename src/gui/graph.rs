@@ -127,7 +127,11 @@ pub fn render_graph(
         },
     );
 
-    if pan_response.dragged() && !pointer_over_node && !breaker.active && !connection_drag.active {
+    if pan_response.dragged_by(egui::PointerButton::Primary)
+        && !pointer_over_node
+        && !breaker.active
+        && !connection_drag.active
+    {
         graph.pan += pan_response.drag_delta();
     }
     if middle_down && pointer_in_rect && !breaker.active && !connection_drag.active {
