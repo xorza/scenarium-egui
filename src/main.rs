@@ -33,6 +33,7 @@ struct ScenariumApp {
     graph_path: PathBuf,
     last_status: Option<String>,
     connection_breaker: gui::graph::ConnectionBreaker,
+    connection_drag: gui::graph::ConnectionDrag,
 }
 
 impl Default for ScenariumApp {
@@ -48,6 +49,7 @@ impl Default for ScenariumApp {
             graph_path,
             last_status: None,
             connection_breaker: gui::graph::ConnectionBreaker::default(),
+            connection_drag: gui::graph::ConnectionDrag::default(),
         }
     }
 }
@@ -72,6 +74,7 @@ impl ScenariumApp {
             .expect("graph should be valid before storing in app state");
         self.graph = graph;
         self.connection_breaker.reset();
+        self.connection_drag.reset();
         self.set_status(status);
     }
 
@@ -161,7 +164,12 @@ impl eframe::App for ScenariumApp {
         });
 
         egui::CentralPanel::default().show(ctx, |ui| {
-            gui::graph::render_graph(ui, &mut self.graph, &mut self.connection_breaker);
+            gui::graph::render_graph(
+                ui,
+                &mut self.graph,
+                &mut self.connection_breaker,
+                &mut self.connection_drag,
+            );
         });
     }
 }

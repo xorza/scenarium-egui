@@ -27,7 +27,68 @@ impl ConnectionBreaker {
     }
 }
 
-pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph, breaker: &mut ConnectionBreaker) {
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+enum PortKind {
+    Input,
+    Output,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+struct PortRef {
+    node_id: Uuid,
+    index: usize,
+    kind: PortKind,
+}
+
+#[derive(Debug, Clone)]
+struct PortInfo {
+    port: PortRef,
+    center: egui::Pos2,
+}
+
+#[derive(Debug)]
+pub struct ConnectionDrag {
+    pub active: bool,
+    start_port: PortRef,
+    start_pos: egui::Pos2,
+    current_pos: egui::Pos2,
+}
+
+impl Default for ConnectionDrag {
+    fn default() -> Self {
+        let placeholder = PortRef {
+            node_id: Uuid::nil(),
+            index: 0,
+            kind: PortKind::Output,
+        };
+        Self {
+            active: false,
+            start_port: placeholder,
+            start_pos: egui::Pos2::ZERO,
+            current_pos: egui::Pos2::ZERO,
+        }
+    }
+}
+
+impl ConnectionDrag {
+    fn start(&mut self, port: PortInfo) {
+        self.active = true;
+        self.start_port = port.port;
+        self.start_pos = port.center;
+        self.current_pos = port.center;
+    }
+
+    pub fn reset(&mut self) {
+        self.active = false;
+    }
+}
+
+pub fn render_graph(
+    ui: &mut egui::Ui,
+    graph: &mut model::Graph,
+    breaker: &mut ConnectionBreaker,
+    connection_drag: &mut ConnectionDrag,
+) {
     let rect = ui.available_rect_before_wrap();
     let painter = ui.painter_at(rect);
     assert!(graph.zoom.is_finite(), "graph zoom must be finite");
@@ -36,29 +97,35 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph, breaker: &mut C
     let pointer_pos = ui.input(|input| input.pointer.hover_pos());
     let pointer_in_rect = pointer_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
     let origin = rect.min + graph.pan;
-    let port_offset = port_offset_for_scale(graph.zoom);
+    let port_radius = node::port_radius_for_scale(graph.zoom);
+    let port_activation = (port_radius * 1.6).max(10.0);
+    let layout = node::NodeLayout::default().scaled(graph.zoom);
+    layout.assert_valid();
+    let ports = collect_ports(graph, origin, &layout);
+    let hovered_port = pointer_pos
+        .filter(|pos| rect.contains(*pos))
+        .and_then(|pos| find_port_near(&ports, pos, port_activation));
+    let hovered_port_ref = hovered_port.as_ref();
     let pointer_over_node = pointer_pos
         .filter(|pos| rect.contains(*pos))
         .is_some_and(|pos| {
             graph.nodes.iter().any(|node| {
                 let node_rect = node::node_rect_for_graph(origin, node, graph.zoom);
-                node_rect
-                    .expand2(egui::vec2(port_offset, 0.0))
-                    .contains(pos)
+                node_rect.contains(pos)
             })
         });
     let pan_id = ui.make_persistent_id("graph_pan");
     let pan_response = ui.interact(
         rect,
         pan_id,
-        if breaker.active || pointer_over_node {
+        if breaker.active || connection_drag.active || pointer_over_node || hovered_port.is_some() {
             egui::Sense::hover()
         } else {
             egui::Sense::drag()
         },
     );
 
-    if pan_response.dragged() && !pointer_over_node && !breaker.active {
+    if pan_response.dragged() && !pointer_over_node && !breaker.active && !connection_drag.active {
         graph.pan += pan_response.drag_delta();
     }
 
@@ -66,12 +133,27 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph, breaker: &mut C
     let primary_down = ui.input(|input| input.pointer.primary_down());
     let primary_released = ui.input(|input| input.pointer.primary_released());
 
-    if !breaker.active && primary_pressed && pointer_in_rect && !pointer_over_node {
+    if !breaker.active
+        && !connection_drag.active
+        && primary_pressed
+        && pointer_in_rect
+        && !pointer_over_node
+        && hovered_port.is_none()
+    {
         breaker.active = true;
         breaker.points.clear();
         if let Some(pos) = pointer_pos {
             breaker.points.push(pos);
         }
+    }
+
+    if !breaker.active
+        && !connection_drag.active
+        && primary_pressed
+        && pointer_in_rect
+        && let Some(port) = hovered_port_ref
+    {
+        connection_drag.start(port.clone());
     }
 
     if breaker.active
@@ -122,9 +204,6 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph, breaker: &mut C
     }
 
     draw_dotted_background(&painter, rect, graph);
-
-    let layout = node::NodeLayout::default().scaled(graph.zoom);
-    layout.assert_valid();
     let curves = collect_connection_curves(graph, origin, &layout);
     let highlighted = if breaker.active && breaker.points.len() > 1 {
         connection_hits(&curves, &breaker.points)
@@ -138,11 +217,36 @@ pub fn render_graph(ui: &mut egui::Ui, graph: &mut model::Graph, breaker: &mut C
         painter.add(egui::Shape::line(breaker.points.clone(), breaker_stroke));
     }
 
+    if connection_drag.active {
+        if let Some(pos) = pointer_pos {
+            connection_drag.current_pos = pos;
+        }
+        let end_pos = hovered_port_ref
+            .filter(|port| port.port.kind != connection_drag.start_port.kind)
+            .map(|port| port.center)
+            .unwrap_or(connection_drag.current_pos);
+        draw_temporary_connection(&painter, graph.zoom, connection_drag.start_pos, end_pos);
+    }
+
     node::render_nodes(ui, graph);
 
     if breaker.active && primary_released {
         remove_connections(graph, &highlighted);
         breaker.reset();
+    }
+
+    if connection_drag.active && primary_released {
+        if let Some(target) = hovered_port_ref
+            && target.port.kind != connection_drag.start_port.kind
+            && port_in_activation_range(
+                &connection_drag.current_pos,
+                target.center,
+                port_activation,
+            )
+        {
+            apply_connection(graph, connection_drag.start_port, target.port);
+        }
+        connection_drag.reset();
     }
 }
 
@@ -221,6 +325,123 @@ fn collect_connection_curves(
     }
 
     curves
+}
+
+fn collect_ports(
+    graph: &model::Graph,
+    origin: egui::Pos2,
+    layout: &node::NodeLayout,
+) -> Vec<PortInfo> {
+    let mut ports = Vec::new();
+
+    for node in &graph.nodes {
+        for (index, _input) in node.inputs.iter().enumerate() {
+            let center = node::node_input_pos(origin, node, index, layout, graph.zoom);
+
+            ports.push(PortInfo {
+                port: PortRef {
+                    node_id: node.id,
+                    index,
+                    kind: PortKind::Input,
+                },
+                center,
+            });
+        }
+        for (index, _output) in node.outputs.iter().enumerate() {
+            let center = node::node_output_pos(origin, node, index, layout, graph.zoom);
+
+            ports.push(PortInfo {
+                port: PortRef {
+                    node_id: node.id,
+                    index,
+                    kind: PortKind::Output,
+                },
+                center,
+            });
+        }
+    }
+
+    ports
+}
+
+fn find_port_near(ports: &[PortInfo], pos: egui::Pos2, radius: f32) -> Option<PortInfo> {
+    assert!(radius.is_finite(), "port activation radius must be finite");
+    assert!(radius > 0.0, "port activation radius must be positive");
+    let mut best = None;
+    let mut best_dist = radius;
+
+    for port in ports {
+        let dist = port.center.distance(pos);
+        if dist <= best_dist {
+            best_dist = dist;
+            best = Some(port.clone());
+        }
+    }
+
+    best
+}
+
+fn draw_temporary_connection(
+    painter: &egui::Painter,
+    scale: f32,
+    start: egui::Pos2,
+    end: egui::Pos2,
+) {
+    let control_offset = node::bezier_control_offset(start, end, scale);
+    let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(170, 200, 255));
+    let shape = egui::epaint::CubicBezierShape::from_points_stroke(
+        [
+            start,
+            start + egui::vec2(control_offset, 0.0),
+            end + egui::vec2(-control_offset, 0.0),
+            end,
+        ],
+        false,
+        egui::Color32::TRANSPARENT,
+        stroke,
+    );
+    painter.add(shape);
+}
+
+fn port_in_activation_range(cursor: &egui::Pos2, port_center: egui::Pos2, radius: f32) -> bool {
+    assert!(radius.is_finite(), "port activation radius must be finite");
+    assert!(radius > 0.0, "port activation radius must be positive");
+    cursor.distance(port_center) <= radius
+}
+
+fn apply_connection(graph: &mut model::Graph, start: PortRef, end: PortRef) {
+    assert!(start.kind != end.kind, "ports must be of opposite types");
+    let (output_port, input_port) = match (start.kind, end.kind) {
+        (PortKind::Output, PortKind::Input) => (start, end),
+        (PortKind::Input, PortKind::Output) => (end, start),
+        _ => {
+            return;
+        }
+    };
+
+    let output_node = graph
+        .nodes
+        .iter()
+        .find(|node| node.id == output_port.node_id)
+        .expect("output node must exist");
+    assert!(
+        output_port.index < output_node.outputs.len(),
+        "output index must be valid for output node"
+    );
+
+    let input_node = graph
+        .nodes
+        .iter_mut()
+        .find(|node| node.id == input_port.node_id)
+        .expect("input node must exist");
+    assert!(
+        input_port.index < input_node.inputs.len(),
+        "input index must be valid for input node"
+    );
+    input_node.inputs[input_port.index].connection = Some(model::Connection {
+        node_id: output_port.node_id,
+        output_index: output_port.index,
+    });
 }
 
 fn draw_connections(
@@ -359,11 +580,6 @@ fn remove_connections(graph: &mut model::Graph, highlighted: &HashSet<Connection
             }
         }
     }
-}
-
-fn port_offset_for_scale(scale: f32) -> f32 {
-    let radius = (5.5 * scale).clamp(3.0, 7.5);
-    radius * 0.8
 }
 
 fn breaker_path_length(points: &[egui::Pos2]) -> f32 {

@@ -61,6 +61,15 @@ pub fn node_rect_for_graph(origin: egui::Pos2, node: &model::Node, scale: f32) -
     egui::Rect::from_min_size(origin + node.pos.to_vec2() * scale, node_size)
 }
 
+pub(crate) fn port_radius_for_scale(scale: f32) -> f32 {
+    assert!(scale.is_finite(), "port scale must be finite");
+    assert!(scale > 0.0, "port scale must be positive");
+    let radius = (5.5 * scale).clamp(3.0, 7.5);
+    assert!(radius.is_finite(), "port radius must be finite");
+    assert!(radius > 0.0, "port radius must be positive");
+    radius
+}
+
 pub fn render_nodes(ui: &mut egui::Ui, graph: &mut model::Graph) {
     let rect = ui.available_rect_before_wrap();
     let painter = ui.painter_at(rect);
@@ -84,11 +93,8 @@ pub fn render_nodes(ui: &mut egui::Ui, graph: &mut model::Graph) {
     let heading_font = scaled_font(ui, egui::TextStyle::Heading, graph.zoom);
     let body_font = scaled_font(ui, egui::TextStyle::Body, graph.zoom);
     let header_text_offset = 4.0 * graph.zoom;
-    let port_radius = (5.5 * graph.zoom).clamp(3.0, 7.5);
+    let port_radius = port_radius_for_scale(graph.zoom);
     let mut selection_request = None;
-
-    assert!(port_radius.is_finite(), "port radius must be finite");
-    assert!(port_radius > 0.0, "port radius must be positive");
 
     for node in &mut graph.nodes {
         let node_size = node_size(node, &layout);
@@ -128,6 +134,7 @@ pub fn render_nodes(ui: &mut egui::Ui, graph: &mut model::Graph) {
 
         for (index, _input) in node.inputs.iter().enumerate() {
             let center = node_input_pos(origin, node, index, &layout, graph.zoom);
+
             let port_rect = egui::Rect::from_center_size(
                 center,
                 egui::vec2(port_radius * 2.0, port_radius * 2.0),
@@ -142,6 +149,7 @@ pub fn render_nodes(ui: &mut egui::Ui, graph: &mut model::Graph) {
 
         for (index, _output) in node.outputs.iter().enumerate() {
             let center = node_output_pos(origin, node, index, &layout, graph.zoom);
+
             let port_rect = egui::Rect::from_center_size(
                 center,
                 egui::vec2(port_radius * 2.0, port_radius * 2.0),
