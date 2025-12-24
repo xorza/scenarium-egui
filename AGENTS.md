@@ -8,3 +8,4 @@ AI coding rules for this project:
 - Add asserts for function input arguments and outputs where applicable, so logic errors crash instead of being swallowed. Do not use asserts for user input and possible network failures.
 - Check online documentation for best practices and patterns.
 - Update README.md with any changes to the project.
+- `NOTES-AI.md` is AI-generated and contains implementation details, project structure, and functionality notes. Avoid adding implementation specifics to `README.md`; instead, update `NOTES-AI.md` and keep it current for fast AI access.
