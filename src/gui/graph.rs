@@ -241,13 +241,20 @@ impl GraphUi {
         let zoom_active = pointer_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
 
         if zoom_active {
+            let modifiers = ui.input(|input| input.modifiers);
+            let scroll_delta = ui.input(|input| input.smooth_scroll_delta);
             let mut zoom_delta = ui.input(|input| input.zoom_delta());
-            let scroll_delta = ui.input(|input| input.smooth_scroll_delta.y);
-            if scroll_delta.abs() > f32::EPSILON {
-                let scroll_zoom = (scroll_delta * 0.002).exp();
-                assert!(scroll_zoom.is_finite(), "scroll zoom factor must be finite");
-                zoom_delta *= scroll_zoom;
+            assert!(scroll_delta.x.is_finite(), "scroll delta x must be finite");
+            assert!(scroll_delta.y.is_finite(), "scroll delta y must be finite");
+
+            if modifiers.command || modifiers.ctrl {
+                if scroll_delta.y.abs() > f32::EPSILON {
+                    let scroll_zoom = (scroll_delta.y * 0.002).exp();
+                    assert!(scroll_zoom.is_finite(), "scroll zoom factor must be finite");
+                    zoom_delta *= scroll_zoom;
+                }
             }
+
             if (zoom_delta - 1.0).abs() > f32::EPSILON {
                 let clamped_zoom = (graph.zoom * zoom_delta).clamp(MIN_ZOOM, MAX_ZOOM);
                 assert!(clamped_zoom.is_finite(), "clamped zoom must be finite");
@@ -260,6 +267,8 @@ impl GraphUi {
                     graph.zoom = clamped_zoom;
                     graph.pan = cursor - origin - graph_pos * graph.zoom;
                 }
+            } else if scroll_delta.length_sq() > f32::EPSILON {
+                graph.pan += scroll_delta;
             }
         }
 
