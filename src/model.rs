@@ -180,7 +180,7 @@ impl Graph {
             outputs: vec![Output {
                 name: "value".to_string(),
             }],
-            cache_output: false,
+            cache_output: true,
             has_cached_output: true,
             terminal: false,
         };
@@ -193,7 +193,7 @@ impl Graph {
             outputs: vec![Output {
                 name: "value".to_string(),
             }],
-            cache_output: false,
+            cache_output: true,
             has_cached_output: true,
             terminal: false,
         };
@@ -267,7 +267,7 @@ impl Graph {
             }],
             outputs: Vec::new(),
             cache_output: false,
-            has_cached_output: true,
+            has_cached_output: false,
             terminal: true,
         };
 
