@@ -14,6 +14,7 @@ pub struct NodeInteraction {
 pub struct NodeLayout {
     pub node_width: f32,
     pub header_height: f32,
+    pub cache_height: f32,
     pub row_height: f32,
     pub padding: f32,
     pub corner_radius: f32,
@@ -24,6 +25,7 @@ impl Default for NodeLayout {
         Self {
             node_width: 180.0,
             header_height: 22.0,
+            cache_height: 20.0,
             row_height: 18.0,
             padding: 8.0,
             corner_radius: 6.0,
@@ -37,6 +39,10 @@ impl NodeLayout {
         assert!(
             self.header_height >= 0.0,
             "header height must be non-negative"
+        );
+        assert!(
+            self.cache_height >= 0.0,
+            "cache height must be non-negative"
         );
         assert!(self.row_height > 0.0, "row height must be positive");
         assert!(self.padding >= 0.0, "padding must be non-negative");
@@ -53,6 +59,7 @@ impl NodeLayout {
         Self {
             node_width: self.node_width * scale,
             header_height: self.header_height * scale,
+            cache_height: self.cache_height * scale,
             row_height: self.row_height * scale,
             padding: self.padding * scale,
             corner_radius: self.corner_radius * scale,
@@ -100,6 +107,10 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
             node_rect.min,
             egui::vec2(node_size.x, ctx.layout.header_height),
         );
+        let cache_rect = egui::Rect::from_min_size(
+            node_rect.min + egui::vec2(0.0, ctx.layout.header_height),
+            egui::vec2(node_size.x, ctx.layout.cache_height),
+        );
         let button_size = (ctx.layout.header_height - ctx.layout.padding)
             .max(12.0 * ctx.scale)
             .min(ctx.layout.header_height);
@@ -115,6 +126,52 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
             header_rect.min,
             egui::pos2(close_rect.min.x - ctx.layout.padding, header_rect.max.y),
         );
+        let cache_button_height = if ctx.layout.cache_height > 0.0 {
+            let vertical_padding = ctx.layout.padding * 0.4;
+            let size = (ctx.layout.cache_height - vertical_padding * 2.0)
+                .max(10.0 * ctx.scale)
+                .min(ctx.layout.cache_height);
+            assert!(size.is_finite(), "cache button height must be finite");
+            assert!(size > 0.0, "cache button height must be positive");
+            size
+        } else {
+            0.0
+        };
+        let cache_button_padding = ctx.layout.padding * 0.5;
+        assert!(
+            cache_button_padding.is_finite(),
+            "cache button padding must be finite"
+        );
+        assert!(
+            cache_button_padding >= 0.0,
+            "cache button padding must be non-negative"
+        );
+        let cache_text_width = if ctx.layout.cache_height > 0.0 {
+            let cached_width = text_width(ctx.painter(), &ctx.body_font, "cached", ctx.text_color);
+            let cache_width = text_width(ctx.painter(), &ctx.body_font, "cache", ctx.text_color);
+            cached_width.max(cache_width)
+        } else {
+            0.0
+        };
+        let cache_button_width = (cache_button_height * 3.1)
+            .max(cache_button_height)
+            .max(cache_text_width + cache_button_padding * 2.0);
+        assert!(
+            cache_button_width.is_finite(),
+            "cache button width must be finite"
+        );
+        assert!(
+            cache_button_width > 0.0,
+            "cache button width must be positive"
+        );
+        let cache_button_pos = egui::pos2(
+            cache_rect.min.x + ctx.layout.padding,
+            cache_rect.min.y + (ctx.layout.cache_height - cache_button_height) * 0.5,
+        );
+        let cache_button_rect = egui::Rect::from_min_size(
+            cache_button_pos,
+            egui::vec2(cache_button_width, cache_button_height),
+        );
 
         let node_id = ctx.ui().make_persistent_id(("node_body", node.id));
         let body_response = ctx.ui().interact(node_rect, node_id, egui::Sense::click());
@@ -123,6 +180,10 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
         let close_response = ctx
             .ui()
             .interact(close_rect, close_id, egui::Sense::click());
+        let cache_id = ctx.ui().make_persistent_id(("node_cache", node.id));
+        let cache_response = ctx
+            .ui()
+            .interact(cache_button_rect, cache_id, egui::Sense::click());
 
         let header_id = ctx.ui().make_persistent_id(("node_header", node.id));
         let response = ctx
@@ -131,6 +192,10 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
 
         if response.dragged() {
             node.pos += response.drag_delta() / ctx.scale;
+        }
+
+        if ctx.layout.cache_height > 0.0 && cache_response.clicked() {
+            node.cache_output = !node.cache_output;
         }
 
         if close_response.hovered() {
@@ -160,6 +225,40 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
             },
             egui::StrokeKind::Inside,
         );
+
+        if ctx.layout.cache_height > 0.0 {
+            let button_fill = if node.cache_output {
+                egui::Color32::from_rgb(240, 205, 90)
+            } else if cache_response.is_pointer_button_down_on() {
+                visuals.widgets.active.bg_fill
+            } else if cache_response.hovered() {
+                visuals.widgets.hovered.bg_fill
+            } else {
+                visuals.widgets.inactive.bg_fill
+            };
+            let button_stroke = visuals.widgets.inactive.bg_stroke;
+            ctx.painter().rect(
+                cache_button_rect,
+                ctx.layout.corner_radius * 0.5,
+                button_fill,
+                button_stroke,
+                egui::StrokeKind::Inside,
+            );
+
+            let button_text = if node.cache_output { "cached" } else { "cache" };
+            let button_text_color = if node.cache_output {
+                egui::Color32::from_rgb(60, 50, 20)
+            } else {
+                visuals.text_color()
+            };
+            ctx.painter().text(
+                cache_button_rect.center(),
+                egui::Align2::CENTER_CENTER,
+                button_text,
+                ctx.body_font.clone(),
+                button_text_color,
+            );
+        }
 
         let close_fill = if close_response.is_pointer_button_down_on() {
             visuals.widgets.active.bg_fill
@@ -264,6 +363,7 @@ pub fn render_node_labels(ctx: &RenderContext, graph: &model::Graph) {
                 + egui::vec2(
                     ctx.layout.padding,
                     ctx.layout.header_height
+                        + ctx.layout.cache_height
                         + ctx.layout.padding
                         + ctx.layout.row_height * index as f32,
                 );
@@ -281,6 +381,7 @@ pub fn render_node_labels(ctx: &RenderContext, graph: &model::Graph) {
                 + egui::vec2(
                     node_width - ctx.layout.padding,
                     ctx.layout.header_height
+                        + ctx.layout.cache_height
                         + ctx.layout.padding
                         + ctx.layout.row_height * index as f32,
                 );
@@ -300,6 +401,7 @@ fn node_size(node: &model::Node, layout: &NodeLayout, node_width: f32) -> egui::
     assert!(node_width > 0.0, "node width must be positive");
     let row_count = node.inputs.len().max(node.outputs.len()).max(1);
     let height = layout.header_height
+        + layout.cache_height
         + layout.padding
         + layout.row_height * row_count as f32
         + layout.padding;
@@ -321,6 +423,7 @@ pub(crate) fn node_input_pos(
     let y = origin.y
         + node.pos.y * scale
         + layout.header_height
+        + layout.cache_height
         + layout.padding
         + layout.row_height * index as f32
         + layout.row_height * 0.5;
@@ -345,6 +448,7 @@ pub(crate) fn node_output_pos(
     let y = origin.y
         + node.pos.y * scale
         + layout.header_height
+        + layout.cache_height
         + layout.padding
         + layout.row_height * index as f32
         + layout.row_height * 0.5;
@@ -368,11 +472,28 @@ pub(crate) fn compute_node_widths(
     text_color: egui::Color32,
 ) -> HashMap<Uuid, f32> {
     layout.assert_valid();
+    let scale_guess = layout.row_height / 18.0;
+    assert!(scale_guess.is_finite(), "layout scale guess must be finite");
+    assert!(scale_guess > 0.0, "layout scale guess must be positive");
     let mut widths = HashMap::with_capacity(graph.nodes.len());
 
     for node in &graph.nodes {
         let header_width =
             text_width(painter, heading_font, &node.name, text_color) + layout.padding * 2.0;
+        let vertical_padding = layout.padding * 0.4;
+        let cache_button_height = (layout.cache_height - vertical_padding * 2.0)
+            .max(10.0 * scale_guess)
+            .min(layout.cache_height);
+        let cache_text_width = text_width(painter, body_font, "cached", text_color)
+            .max(text_width(painter, body_font, "cache", text_color));
+        let cache_button_width = (cache_button_height * 3.1)
+            .max(cache_button_height)
+            .max(cache_text_width + layout.padding);
+        let cache_row_width = if layout.cache_height > 0.0 {
+            layout.padding + cache_button_width + layout.padding
+        } else {
+            0.0
+        };
 
         let input_widths: Vec<f32> = node
             .inputs
@@ -399,7 +520,9 @@ pub(crate) fn compute_node_widths(
             max_row_width = max_row_width.max(row_width);
         }
 
-        let computed = layout.node_width.max(header_width.max(max_row_width));
+        let computed = layout
+            .node_width
+            .max(header_width.max(max_row_width).max(cache_row_width));
         assert!(computed.is_finite(), "node width must be finite");
         assert!(computed > 0.0, "node width must be positive");
         let prior = widths.insert(node.id, computed);

@@ -26,6 +26,7 @@ pub struct Node {
     pub pos: egui::Pos2,
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
+    pub cache_output: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
@@ -56,6 +57,7 @@ impl Default for Node {
             pos: egui::Pos2::ZERO,
             inputs: Vec::new(),
             outputs: Vec::new(),
+            cache_output: false,
         }
     }
 }
@@ -173,6 +175,7 @@ impl Graph {
             outputs: vec![Output {
                 name: "value".to_string(),
             }],
+            cache_output: false,
         };
 
         let value_b = Node {
@@ -183,6 +186,7 @@ impl Graph {
             outputs: vec![Output {
                 name: "value".to_string(),
             }],
+            cache_output: false,
         };
 
         let sum = Node {
@@ -208,6 +212,7 @@ impl Graph {
             outputs: vec![Output {
                 name: "sum".to_string(),
             }],
+            cache_output: false,
         };
 
         let divide = Node {
@@ -233,6 +238,7 @@ impl Graph {
             outputs: vec![Output {
                 name: "divide".to_string(),
             }],
+            cache_output: false,
         };
 
         let output = Node {
@@ -247,6 +253,7 @@ impl Graph {
                 }),
             }],
             outputs: Vec::new(),
+            cache_output: false,
         };
 
         let graph = Self {

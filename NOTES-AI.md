@@ -60,6 +60,7 @@ This file is AI-generated and contains implementation details, project structure
   - hover tooltip: “Remove node”
   - pressed/hover styling
   - removing a node clears inbound connections
+- Each node has a small panel under the title with a compact `cache` button (turns yellow when active) that toggles `Node::cache_output`.
 
 #### Ports + Connections
 - Inputs/outputs are rendered as circular ports; hover brightens color.
