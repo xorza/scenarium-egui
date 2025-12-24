@@ -244,7 +244,7 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
                 egui::StrokeKind::Inside,
             );
 
-            let button_text = if node.cache_output { "cached" } else { "cache" };
+            let button_text = "cache";
             let button_text_color = if node.cache_output {
                 ctx.style.cache_checked_text_color
             } else {
