@@ -269,6 +269,32 @@ impl Graph {
         );
         self.selected_node_id = Some(node_id);
     }
+
+    pub fn remove_node(&mut self, node_id: Uuid) {
+        assert!(
+            self.nodes.iter().any(|node| node.id == node_id),
+            "node must exist to be removed"
+        );
+
+        self.nodes.retain(|node| node.id != node_id);
+
+        if self
+            .selected_node_id
+            .is_some_and(|selected| selected == node_id)
+        {
+            self.selected_node_id = None;
+        }
+
+        for node in &mut self.nodes {
+            for input in &mut node.inputs {
+                if let Some(connection) = &input.connection
+                    && connection.node_id == node_id
+                {
+                    input.connection = None;
+                }
+            }
+        }
+    }
 }
 
 impl GraphFormat {

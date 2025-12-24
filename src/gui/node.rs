@@ -4,6 +4,12 @@ use uuid::Uuid;
 
 use crate::{gui::render::RenderContext, model};
 
+#[derive(Debug, Default)]
+pub struct NodeInteraction {
+    pub selection_request: Option<Uuid>,
+    pub remove_request: Option<Uuid>,
+}
+
 #[derive(Debug)]
 pub struct NodeLayout {
     pub node_width: f32,
@@ -77,13 +83,13 @@ pub(crate) fn port_radius_for_scale(scale: f32) -> f32 {
     radius
 }
 
-pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Option<Uuid> {
+pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> NodeInteraction {
     let visuals = ctx.ui().visuals();
     let node_fill = visuals.widgets.noninteractive.bg_fill;
     let node_stroke = visuals.widgets.noninteractive.bg_stroke;
     let selected_stroke =
         egui::Stroke::new(node_stroke.width.max(2.0), visuals.selection.stroke.color);
-    let mut selection_request = None;
+    let mut interaction = NodeInteraction::default();
 
     for node in &mut graph.nodes {
         let node_width = ctx.node_width(node.id);
@@ -94,24 +100,53 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Opti
             node_rect.min,
             egui::vec2(node_size.x, ctx.layout.header_height),
         );
+        let button_size = (ctx.layout.header_height - ctx.layout.padding)
+            .max(12.0 * ctx.scale)
+            .min(ctx.layout.header_height);
+        assert!(button_size.is_finite(), "close button size must be finite");
+        assert!(button_size > 0.0, "close button size must be positive");
+        let button_pos = egui::pos2(
+            node_rect.max.x - ctx.layout.padding - button_size,
+            node_rect.min.y + (ctx.layout.header_height - button_size) * 0.5,
+        );
+        let close_rect =
+            egui::Rect::from_min_size(button_pos, egui::vec2(button_size, button_size));
+        let header_drag_rect = egui::Rect::from_min_max(
+            header_rect.min,
+            egui::pos2(close_rect.min.x - ctx.layout.padding, header_rect.max.y),
+        );
 
         let node_id = ctx.ui().make_persistent_id(("node_body", node.id));
         let body_response = ctx.ui().interact(node_rect, node_id, egui::Sense::click());
 
+        let close_id = ctx.ui().make_persistent_id(("node_close", node.id));
+        let close_response = ctx
+            .ui()
+            .interact(close_rect, close_id, egui::Sense::click());
+
         let header_id = ctx.ui().make_persistent_id(("node_header", node.id));
         let response = ctx
             .ui()
-            .interact(header_rect, header_id, egui::Sense::drag());
+            .interact(header_drag_rect, header_id, egui::Sense::drag());
 
         if response.dragged() {
             node.pos += response.drag_delta() / ctx.scale;
         }
 
-        if response.clicked() || response.dragged() || body_response.clicked() {
-            selection_request = Some(node.id);
+        if close_response.hovered() {
+            close_response.show_tooltip_text("Remove node");
         }
 
-        let selected_id = selection_request.or(graph.selected_node_id);
+        if close_response.clicked() {
+            interaction.remove_request = Some(node.id);
+            continue;
+        }
+
+        if response.clicked() || response.dragged() || body_response.clicked() {
+            interaction.selection_request = Some(node.id);
+        }
+
+        let selected_id = interaction.selection_request.or(graph.selected_node_id);
         let is_selected = selected_id.is_some_and(|id| id == node.id);
 
         ctx.painter().rect(
@@ -125,9 +160,46 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Opti
             },
             egui::StrokeKind::Inside,
         );
+
+        let close_fill = if close_response.is_pointer_button_down_on() {
+            visuals.widgets.active.bg_fill
+        } else if close_response.hovered() {
+            visuals.widgets.hovered.bg_fill
+        } else {
+            visuals.widgets.inactive.bg_fill
+        };
+        let close_stroke = visuals.widgets.inactive.bg_stroke;
+        ctx.painter().rect(
+            close_rect,
+            ctx.layout.corner_radius * 0.6,
+            close_fill,
+            close_stroke,
+            egui::StrokeKind::Inside,
+        );
+        let close_margin = button_size * 0.3;
+        let a = egui::pos2(
+            close_rect.min.x + close_margin,
+            close_rect.min.y + close_margin,
+        );
+        let b = egui::pos2(
+            close_rect.max.x - close_margin,
+            close_rect.max.y - close_margin,
+        );
+        let c = egui::pos2(
+            close_rect.min.x + close_margin,
+            close_rect.max.y - close_margin,
+        );
+        let d = egui::pos2(
+            close_rect.max.x - close_margin,
+            close_rect.min.y + close_margin,
+        );
+        let close_color = visuals.text_color();
+        let close_stroke = egui::Stroke::new(1.4 * ctx.scale, close_color);
+        ctx.painter().line_segment([a, b], close_stroke);
+        ctx.painter().line_segment([c, d], close_stroke);
     }
 
-    selection_request
+    interaction
 }
 
 pub fn render_ports(ctx: &RenderContext, graph: &model::Graph) {

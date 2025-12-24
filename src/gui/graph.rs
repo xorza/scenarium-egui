@@ -293,7 +293,10 @@ impl GraphUi {
             );
         }
 
-        let selection_request = node_bodies.render(&ctx, graph);
+        let interaction = node_bodies.render(&ctx, graph);
+        if let Some(node_id) = interaction.remove_request {
+            graph.remove_node(node_id);
+        }
         ports.render(&ctx, graph);
         labels.render(&ctx, graph);
 
@@ -316,7 +319,7 @@ impl GraphUi {
             connection_drag.reset();
         }
 
-        if let Some(selected_id) = selection_request {
+        if let Some(selected_id) = interaction.selection_request {
             graph.select_node(selected_id);
         }
     }
@@ -373,7 +376,7 @@ impl WidgetRenderer for ConnectionRenderer {
 struct NodeBodyRenderer;
 
 impl WidgetRenderer for NodeBodyRenderer {
-    type Output = Option<Uuid>;
+    type Output = node::NodeInteraction;
 
     fn render(&mut self, ctx: &RenderContext, graph: &mut model::Graph) -> Self::Output {
         node::render_node_bodies(ctx, graph)
