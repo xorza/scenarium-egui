@@ -62,6 +62,7 @@ This file is AI-generated and contains implementation details, project structure
   - pressed/hover styling
   - removing a node clears inbound connections
 - Each node has a small panel under the title with a compact `cache` button (turns yellow when active) that toggles `Node::cache_output`.
+- Under the cache row, nodes can display status indicators: `has_cached_output` and `terminal` are shown as small colored circles with labels (read-only).
 
 #### Ports + Connections
 - Inputs/outputs are rendered as circular ports; hover brightens color.

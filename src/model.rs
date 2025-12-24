@@ -61,6 +61,8 @@ impl Default for Node {
             inputs: Vec::new(),
             outputs: Vec::new(),
             cache_output: false,
+            has_cached_output: false,
+            terminal: false,
         }
     }
 }
@@ -179,6 +181,8 @@ impl Graph {
                 name: "value".to_string(),
             }],
             cache_output: false,
+            has_cached_output: true,
+            terminal: false,
         };
 
         let value_b = Node {
@@ -190,6 +194,8 @@ impl Graph {
                 name: "value".to_string(),
             }],
             cache_output: false,
+            has_cached_output: true,
+            terminal: false,
         };
 
         let sum = Node {
@@ -216,6 +222,8 @@ impl Graph {
                 name: "sum".to_string(),
             }],
             cache_output: false,
+            has_cached_output: false,
+            terminal: false,
         };
 
         let divide = Node {
@@ -242,6 +250,8 @@ impl Graph {
                 name: "divide".to_string(),
             }],
             cache_output: false,
+            has_cached_output: false,
+            terminal: false,
         };
 
         let output = Node {
@@ -257,6 +267,8 @@ impl Graph {
             }],
             outputs: Vec::new(),
             cache_output: false,
+            has_cached_output: true,
+            terminal: true,
         };
 
         let graph = Self {

@@ -15,6 +15,7 @@ pub struct NodeLayout {
     pub node_width: f32,
     pub header_height: f32,
     pub cache_height: f32,
+    pub status_height: f32,
     pub row_height: f32,
     pub padding: f32,
     pub corner_radius: f32,
@@ -26,6 +27,7 @@ impl Default for NodeLayout {
             node_width: 180.0,
             header_height: 22.0,
             cache_height: 20.0,
+            status_height: 18.0,
             row_height: 18.0,
             padding: 8.0,
             corner_radius: 6.0,
@@ -44,6 +46,10 @@ impl NodeLayout {
             self.cache_height >= 0.0,
             "cache height must be non-negative"
         );
+        assert!(
+            self.status_height >= 0.0,
+            "status height must be non-negative"
+        );
         assert!(self.row_height > 0.0, "row height must be positive");
         assert!(self.padding >= 0.0, "padding must be non-negative");
         assert!(
@@ -60,6 +66,7 @@ impl NodeLayout {
             node_width: self.node_width * scale,
             header_height: self.header_height * scale,
             cache_height: self.cache_height * scale,
+            status_height: self.status_height * scale,
             row_height: self.row_height * scale,
             padding: self.padding * scale,
             corner_radius: self.corner_radius * scale,
@@ -109,6 +116,11 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
         let cache_rect = egui::Rect::from_min_size(
             node_rect.min + egui::vec2(0.0, ctx.layout.header_height),
             egui::vec2(node_size.x, ctx.layout.cache_height),
+        );
+        let status_height = status_row_height(node, &ctx.layout);
+        let status_rect = egui::Rect::from_min_size(
+            node_rect.min + egui::vec2(0.0, ctx.layout.header_height + ctx.layout.cache_height),
+            egui::vec2(node_size.x, status_height),
         );
         let button_size = (ctx.layout.header_height - ctx.layout.padding)
             .max(12.0 * ctx.scale)
@@ -259,6 +271,50 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
             );
         }
 
+        if status_height > 0.0 {
+            let mut cursor_x = status_rect.min.x + ctx.layout.padding;
+            let center_y = status_rect.center().y;
+            let dot_radius = ctx.style.status_dot_radius;
+            assert!(dot_radius.is_finite(), "status dot radius must be finite");
+            assert!(dot_radius >= 0.0, "status dot radius must be non-negative");
+            let item_gap = ctx.style.status_item_gap;
+
+            if node.has_cached_output {
+                let dot_center = egui::pos2(cursor_x + dot_radius, center_y);
+                ctx.painter()
+                    .circle_filled(dot_center, dot_radius, ctx.style.cache_active_color);
+                cursor_x += dot_radius * 2.0 + ctx.layout.padding * 0.5;
+                ctx.painter().text(
+                    egui::pos2(cursor_x, center_y),
+                    egui::Align2::LEFT_CENTER,
+                    "cached output",
+                    ctx.body_font.clone(),
+                    visuals.text_color(),
+                );
+                let label_width = text_width(
+                    ctx.painter(),
+                    &ctx.body_font,
+                    "cached output",
+                    ctx.text_color,
+                );
+                cursor_x += label_width + item_gap;
+            }
+
+            if node.terminal {
+                let dot_center = egui::pos2(cursor_x + dot_radius, center_y);
+                ctx.painter()
+                    .circle_filled(dot_center, dot_radius, visuals.selection.stroke.color);
+                cursor_x += dot_radius * 2.0 + ctx.layout.padding * 0.5;
+                ctx.painter().text(
+                    egui::pos2(cursor_x, center_y),
+                    egui::Align2::LEFT_CENTER,
+                    "terminal",
+                    ctx.body_font.clone(),
+                    visuals.text_color(),
+                );
+            }
+        }
+
         let close_fill = if close_response.is_pointer_button_down_on() {
             visuals.widgets.active.bg_fill
         } else if close_response.hovered() {
@@ -358,6 +414,7 @@ pub fn render_node_labels(ctx: &RenderContext, graph: &model::Graph) {
                     ctx.layout.padding,
                     ctx.layout.header_height
                         + ctx.layout.cache_height
+                        + status_row_height(node, &ctx.layout)
                         + ctx.layout.padding
                         + ctx.layout.row_height * index as f32,
                 );
@@ -376,6 +433,7 @@ pub fn render_node_labels(ctx: &RenderContext, graph: &model::Graph) {
                     node_width - ctx.layout.padding,
                     ctx.layout.header_height
                         + ctx.layout.cache_height
+                        + status_row_height(node, &ctx.layout)
                         + ctx.layout.padding
                         + ctx.layout.row_height * index as f32,
                 );
@@ -396,6 +454,7 @@ fn node_size(node: &model::Node, layout: &NodeLayout, node_width: f32) -> egui::
     let row_count = node.inputs.len().max(node.outputs.len()).max(1);
     let height = layout.header_height
         + layout.cache_height
+        + status_row_height(node, layout)
         + layout.padding
         + layout.row_height * row_count as f32
         + layout.padding;
@@ -418,6 +477,7 @@ pub(crate) fn node_input_pos(
         + node.pos.y * scale
         + layout.header_height
         + layout.cache_height
+        + status_row_height(node, layout)
         + layout.padding
         + layout.row_height * index as f32
         + layout.row_height * 0.5;
@@ -443,6 +503,7 @@ pub(crate) fn node_output_pos(
         + node.pos.y * scale
         + layout.header_height
         + layout.cache_height
+        + status_row_height(node, layout)
         + layout.padding
         + layout.row_height * index as f32
         + layout.row_height * 0.5;
@@ -489,6 +550,33 @@ pub(crate) fn compute_node_widths(
         } else {
             0.0
         };
+        let status_row_width = if node.has_cached_output || node.terminal {
+            let dot_diameter = style.status_dot_radius * 2.0;
+            let text_padding = layout.padding * 0.5;
+            let cached_label = "cached output";
+            let terminal_label = "terminal";
+            let cached_width = if node.has_cached_output {
+                dot_diameter
+                    + text_padding
+                    + text_width(painter, body_font, cached_label, text_color)
+            } else {
+                0.0
+            };
+            let terminal_width = if node.terminal {
+                dot_diameter
+                    + text_padding
+                    + text_width(painter, body_font, terminal_label, text_color)
+            } else {
+                0.0
+            };
+            let mut total = cached_width + terminal_width;
+            if node.has_cached_output && node.terminal {
+                total += style.status_item_gap;
+            }
+            layout.padding + total + layout.padding
+        } else {
+            0.0
+        };
 
         let input_widths: Vec<f32> = node
             .inputs
@@ -515,9 +603,12 @@ pub(crate) fn compute_node_widths(
             max_row_width = max_row_width.max(row_width);
         }
 
-        let computed = layout
-            .node_width
-            .max(header_width.max(max_row_width).max(cache_row_width));
+        let computed = layout.node_width.max(
+            header_width
+                .max(max_row_width)
+                .max(cache_row_width)
+                .max(status_row_width),
+        );
         assert!(computed.is_finite(), "node width must be finite");
         assert!(computed > 0.0, "node width must be positive");
         let prior = widths.insert(node.id, computed);
@@ -537,6 +628,14 @@ pub(crate) fn scaled_font(ui: &egui::Ui, style: egui::TextStyle, scale: f32) -> 
     egui::FontId {
         size: base.size * scale,
         family: base.family.clone(),
+    }
+}
+
+fn status_row_height(node: &model::Node, layout: &NodeLayout) -> f32 {
+    if node.has_cached_output || node.terminal {
+        layout.status_height
+    } else {
+        0.0
     }
 }
 

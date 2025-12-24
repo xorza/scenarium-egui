@@ -9,6 +9,8 @@ pub struct GraphStyle {
     pub cache_button_text_pad_factor: f32,
     pub cache_active_color: egui::Color32,
     pub cache_checked_text_color: egui::Color32,
+    pub status_dot_radius: f32,
+    pub status_item_gap: f32,
     pub input_port_color: egui::Color32,
     pub output_port_color: egui::Color32,
     pub input_hover_color: egui::Color32,
@@ -45,6 +47,8 @@ impl GraphStyle {
             cache_button_text_pad_factor: 0.5,
             cache_active_color: egui::Color32::from_rgb(240, 205, 90),
             cache_checked_text_color: egui::Color32::from_rgb(60, 50, 20),
+            status_dot_radius: 4.0 * scale,
+            status_item_gap: 6.0 * scale,
             input_port_color: egui::Color32::from_rgb(70, 150, 255),
             output_port_color: egui::Color32::from_rgb(70, 200, 200),
             input_hover_color: egui::Color32::from_rgb(120, 190, 255),
@@ -97,6 +101,22 @@ impl GraphStyle {
         assert!(
             self.cache_button_text_pad_factor >= 0.0,
             "cache button text padding factor must be non-negative"
+        );
+        assert!(
+            self.status_dot_radius.is_finite(),
+            "status dot radius must be finite"
+        );
+        assert!(
+            self.status_dot_radius >= 0.0,
+            "status dot radius must be non-negative"
+        );
+        assert!(
+            self.status_item_gap.is_finite(),
+            "status item gap must be finite"
+        );
+        assert!(
+            self.status_item_gap >= 0.0,
+            "status item gap must be non-negative"
         );
         assert!(
             self.dotted_base_spacing.is_finite(),
