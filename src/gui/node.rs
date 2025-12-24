@@ -92,10 +92,9 @@ pub(crate) fn port_radius_for_scale(scale: f32) -> f32 {
 
 pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> NodeInteraction {
     let visuals = ctx.ui().visuals();
-    let node_fill = visuals.widgets.noninteractive.bg_fill;
-    let node_stroke = visuals.widgets.noninteractive.bg_stroke;
-    let selected_stroke =
-        egui::Stroke::new(node_stroke.width.max(2.0), visuals.selection.stroke.color);
+    let node_fill = ctx.style.node_fill;
+    let node_stroke = ctx.style.node_stroke;
+    let selected_stroke = ctx.style.selected_stroke;
     let mut interaction = NodeInteraction::default();
 
     for node in &mut graph.nodes {
@@ -127,7 +126,7 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
             egui::pos2(close_rect.min.x - ctx.layout.padding, header_rect.max.y),
         );
         let cache_button_height = if ctx.layout.cache_height > 0.0 {
-            let vertical_padding = ctx.layout.padding * 0.4;
+            let vertical_padding = ctx.layout.padding * ctx.style.cache_button_vertical_pad_factor;
             let size = (ctx.layout.cache_height - vertical_padding * 2.0)
                 .max(10.0 * ctx.scale)
                 .min(ctx.layout.cache_height);
@@ -137,7 +136,7 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
         } else {
             0.0
         };
-        let cache_button_padding = ctx.layout.padding * 0.5;
+        let cache_button_padding = ctx.layout.padding * ctx.style.cache_button_text_pad_factor;
         assert!(
             cache_button_padding.is_finite(),
             "cache button padding must be finite"
@@ -153,7 +152,7 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
         } else {
             0.0
         };
-        let cache_button_width = (cache_button_height * 3.1)
+        let cache_button_width = (cache_button_height * ctx.style.cache_button_width_factor)
             .max(cache_button_height)
             .max(cache_text_width + cache_button_padding * 2.0);
         assert!(
@@ -228,7 +227,7 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
 
         if ctx.layout.cache_height > 0.0 {
             let button_fill = if node.cache_output {
-                egui::Color32::from_rgb(240, 205, 90)
+                ctx.style.cache_active_color
             } else if cache_response.is_pointer_button_down_on() {
                 visuals.widgets.active.bg_fill
             } else if cache_response.hovered() {
@@ -247,7 +246,7 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
 
             let button_text = if node.cache_output { "cached" } else { "cache" };
             let button_text_color = if node.cache_output {
-                egui::Color32::from_rgb(60, 50, 20)
+                ctx.style.cache_checked_text_color
             } else {
                 visuals.text_color()
             };
@@ -302,11 +301,6 @@ pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Node
 }
 
 pub fn render_ports(ctx: &RenderContext, graph: &model::Graph) {
-    let input_port_color = egui::Color32::from_rgb(70, 150, 255);
-    let output_port_color = egui::Color32::from_rgb(70, 200, 200);
-    let input_hover_color = egui::Color32::from_rgb(120, 190, 255);
-    let output_hover_color = egui::Color32::from_rgb(110, 230, 210);
-
     for node in &graph.nodes {
         let node_width = ctx.node_width(node.id);
 
@@ -318,9 +312,9 @@ pub fn render_ports(ctx: &RenderContext, graph: &model::Graph) {
                 egui::vec2(ctx.port_radius * 2.0, ctx.port_radius * 2.0),
             );
             let color = if ctx.ui().rect_contains_pointer(port_rect) {
-                input_hover_color
+                ctx.style.input_hover_color
             } else {
-                input_port_color
+                ctx.style.input_port_color
             };
             ctx.painter().circle_filled(center, ctx.port_radius, color);
         }
@@ -334,9 +328,9 @@ pub fn render_ports(ctx: &RenderContext, graph: &model::Graph) {
                 egui::vec2(ctx.port_radius * 2.0, ctx.port_radius * 2.0),
             );
             let color = if ctx.ui().rect_contains_pointer(port_rect) {
-                output_hover_color
+                ctx.style.output_hover_color
             } else {
-                output_port_color
+                ctx.style.output_port_color
             };
             ctx.painter().circle_filled(center, ctx.port_radius, color);
         }
@@ -344,7 +338,7 @@ pub fn render_ports(ctx: &RenderContext, graph: &model::Graph) {
 }
 
 pub fn render_node_labels(ctx: &RenderContext, graph: &model::Graph) {
-    let header_text_offset = 4.0 * ctx.scale;
+    let header_text_offset = ctx.style.header_text_offset;
 
     for node in &graph.nodes {
         let node_rect = ctx.node_rect(node);
@@ -470,8 +464,33 @@ pub(crate) fn compute_node_widths(
     heading_font: &egui::FontId,
     body_font: &egui::FontId,
     text_color: egui::Color32,
+    style: &crate::gui::style::GraphStyle,
 ) -> HashMap<Uuid, f32> {
     layout.assert_valid();
+    assert!(
+        style.cache_button_width_factor.is_finite(),
+        "cache button width factor must be finite"
+    );
+    assert!(
+        style.cache_button_width_factor > 0.0,
+        "cache button width factor must be positive"
+    );
+    assert!(
+        style.cache_button_text_pad_factor.is_finite(),
+        "cache button text padding factor must be finite"
+    );
+    assert!(
+        style.cache_button_text_pad_factor >= 0.0,
+        "cache button text padding factor must be non-negative"
+    );
+    assert!(
+        style.cache_button_vertical_pad_factor.is_finite(),
+        "cache button vertical padding factor must be finite"
+    );
+    assert!(
+        style.cache_button_vertical_pad_factor >= 0.0,
+        "cache button vertical padding factor must be non-negative"
+    );
     let scale_guess = layout.row_height / 18.0;
     assert!(scale_guess.is_finite(), "layout scale guess must be finite");
     assert!(scale_guess > 0.0, "layout scale guess must be positive");
@@ -480,15 +499,15 @@ pub(crate) fn compute_node_widths(
     for node in &graph.nodes {
         let header_width =
             text_width(painter, heading_font, &node.name, text_color) + layout.padding * 2.0;
-        let vertical_padding = layout.padding * 0.4;
+        let vertical_padding = layout.padding * style.cache_button_vertical_pad_factor;
         let cache_button_height = (layout.cache_height - vertical_padding * 2.0)
             .max(10.0 * scale_guess)
             .min(layout.cache_height);
         let cache_text_width = text_width(painter, body_font, "cached", text_color)
             .max(text_width(painter, body_font, "cache", text_color));
-        let cache_button_width = (cache_button_height * 3.1)
+        let cache_button_width = (cache_button_height * style.cache_button_width_factor)
             .max(cache_button_height)
-            .max(cache_text_width + layout.padding);
+            .max(cache_text_width + layout.padding * style.cache_button_text_pad_factor * 2.0);
         let cache_row_width = if layout.cache_height > 0.0 {
             layout.padding + cache_button_width + layout.padding
         } else {

@@ -271,9 +271,10 @@ impl GraphUi {
         connections.render(&ctx, graph);
 
         if breaker.active && breaker.points.len() > 1 {
-            let breaker_stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(255, 120, 120));
-            ctx.painter()
-                .add(egui::Shape::line(breaker.points.clone(), breaker_stroke));
+            ctx.painter().add(egui::Shape::line(
+                breaker.points.clone(),
+                ctx.style.breaker_stroke,
+            ));
         }
 
         if connection_drag.active {
@@ -290,6 +291,7 @@ impl GraphUi {
                 connection_drag.start_pos,
                 end_pos,
                 connection_drag.start_port.kind,
+                &ctx.style,
             );
         }
 
@@ -332,7 +334,7 @@ impl WidgetRenderer for BackgroundRenderer {
     type Output = ();
 
     fn render(&mut self, ctx: &RenderContext, graph: &mut model::Graph) -> Self::Output {
-        draw_dotted_background(ctx.painter(), ctx.rect, graph);
+        draw_dotted_background(ctx.painter(), ctx.rect, graph, &ctx.style);
     }
 }
 
@@ -368,7 +370,7 @@ impl WidgetRenderer for ConnectionRenderer {
     type Output = ();
 
     fn render(&mut self, ctx: &RenderContext, _graph: &mut model::Graph) -> Self::Output {
-        draw_connections(ctx.painter(), &self.curves, &self.highlighted);
+        draw_connections(ctx.painter(), &self.curves, &self.highlighted, &ctx.style);
     }
 }
 
@@ -405,11 +407,16 @@ impl WidgetRenderer for NodeLabelRenderer {
     }
 }
 
-fn draw_dotted_background(painter: &egui::Painter, rect: egui::Rect, graph: &model::Graph) {
-    let base_spacing = 24.0;
-    let spacing = base_spacing * graph.zoom;
-    let radius = (1.2 * graph.zoom).clamp(0.6, 2.4);
-    let color = egui::Color32::from_rgba_unmultiplied(255, 255, 255, 28);
+fn draw_dotted_background(
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    graph: &model::Graph,
+    style: &crate::gui::style::GraphStyle,
+) {
+    let spacing = style.dotted_base_spacing * graph.zoom;
+    let radius = (style.dotted_radius_base * graph.zoom)
+        .clamp(style.dotted_radius_min, style.dotted_radius_max);
+    let color = style.dotted_color;
 
     assert!(spacing.is_finite(), "dot spacing must be finite");
     assert!(spacing > 0.0, "dot spacing must be positive");
@@ -553,6 +560,7 @@ fn draw_temporary_connection(
     start: egui::Pos2,
     end: egui::Pos2,
     start_kind: PortKind,
+    style: &crate::gui::style::GraphStyle,
 ) {
     assert!(scale.is_finite(), "connection scale must be finite");
     assert!(scale > 0.0, "connection scale must be positive");
@@ -561,7 +569,7 @@ fn draw_temporary_connection(
         PortKind::Output => (1.0, -1.0),
         PortKind::Input => (-1.0, 1.0),
     };
-    let stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(170, 200, 255));
+    let stroke = style.temp_connection_stroke;
     let shape = egui::epaint::CubicBezierShape::from_points_stroke(
         [
             start,
@@ -621,15 +629,13 @@ fn draw_connections(
     painter: &egui::Painter,
     curves: &[ConnectionCurve],
     highlighted: &HashSet<ConnectionKey>,
+    style: &crate::gui::style::GraphStyle,
 ) {
-    let base_stroke = egui::Stroke::new(2.0, egui::Color32::from_rgb(80, 160, 255));
-    let highlight_stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(255, 90, 90));
-
     for curve in curves {
         let stroke = if highlighted.contains(&curve.key) {
-            highlight_stroke
+            style.connection_highlight_stroke
         } else {
-            base_stroke
+            style.connection_stroke
         };
         let control_offset = curve.control_offset;
         let shape = egui::epaint::CubicBezierShape::from_points_stroke(

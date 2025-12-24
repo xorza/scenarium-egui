@@ -8,10 +8,11 @@ This file is AI-generated and contains implementation details, project structure
   - `main.rs`: application entry point and egui app wiring.
   - `init.rs`: startup initialization (dotenv + tracing).
   - `model.rs`: data model, serialization, validation, and test graph builder.
-  - `gui/`
-    - `graph.rs`: graph view input handling, background, connections, and overall rendering orchestration.
-    - `node.rs`: node geometry, ports, label layout, and node body interactions.
-    - `render.rs`: shared `RenderContext` + `WidgetRenderer` trait for reusable rendering helpers.
+- `gui/`
+  - `graph.rs`: graph view input handling, background, connections, and overall rendering orchestration.
+  - `node.rs`: node geometry, ports, label layout, and node body interactions.
+  - `render.rs`: shared `RenderContext` + `WidgetRenderer` trait for reusable rendering helpers.
+  - `style.rs`: centralized UI styling constants (colors, padding factors, stroke styles).
     - `mod.rs`: gui module exports.
 - `assets/`: window icon, fonts, and Wayland desktop entry.
 

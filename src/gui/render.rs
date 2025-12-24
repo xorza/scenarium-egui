@@ -3,7 +3,10 @@ use std::collections::HashMap;
 use std::marker::PhantomData;
 use uuid::Uuid;
 
-use crate::{gui::node, model};
+use crate::{
+    gui::{node, style::GraphStyle},
+    model,
+};
 
 #[derive(Debug, Clone, Copy)]
 pub struct UiRef<'a> {
@@ -55,6 +58,7 @@ pub struct RenderContext<'a> {
     pub heading_font: egui::FontId,
     pub body_font: egui::FontId,
     pub text_color: egui::Color32,
+    pub style: GraphStyle,
     pub node_widths: HashMap<Uuid, f32>,
     pub port_radius: f32,
     pub scale: f32,
@@ -78,6 +82,7 @@ impl<'a> RenderContext<'a> {
         let heading_font = node::scaled_font(ui, egui::TextStyle::Heading, graph.zoom);
         let body_font = node::scaled_font(ui, egui::TextStyle::Body, graph.zoom);
         let text_color = ui.visuals().text_color();
+        let style = GraphStyle::new(ui, graph.zoom);
         let node_widths = node::compute_node_widths(
             painter,
             graph,
@@ -85,6 +90,7 @@ impl<'a> RenderContext<'a> {
             &heading_font,
             &body_font,
             text_color,
+            &style,
         );
         let origin = rect.min + graph.pan;
         let port_radius = node::port_radius_for_scale(graph.zoom);
@@ -98,6 +104,7 @@ impl<'a> RenderContext<'a> {
             heading_font,
             body_font,
             text_color,
+            style,
             node_widths,
             port_radius,
             scale: graph.zoom,
