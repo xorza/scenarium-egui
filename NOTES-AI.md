@@ -8,19 +8,15 @@ This file is AI-generated and contains implementation details, project structure
   - `main.rs`: application entry point and egui app wiring.
   - `init.rs`: startup initialization (dotenv + tracing).
   - `model.rs`: data model, serialization, validation, and test graph builder.
-- `gui/`
-  - `graph.rs`: graph view input handling, background, connections, and overall rendering orchestration.
-  - `node.rs`: node geometry, ports, label layout, and node body interactions.
-- `render.rs`: shared `RenderContext` + `WidgetRenderer` trait for reusable rendering helpers.
-- `style.rs`: centralized UI styling constants (colors, padding factors, stroke styles).
+  - `gui/`
+    - `graph.rs`: graph view input handling, background, connections, and overall rendering orchestration.
+    - `node.rs`: node geometry, ports, label layout, and node body interactions.
+    - `render.rs`: shared `RenderContext` + `WidgetRenderer` trait for reusable rendering helpers.
+    - `style.rs`: centralized UI styling constants (colors, padding factors, stroke styles).
     - `mod.rs`: gui module exports.
 - `assets/`: window icon, fonts, and Wayland desktop entry.
 
 ## Functionality
-
-### GUIDs (UUIDs)
-- Uses `uuid` crate to generate UUID v4 values.
-- UI includes a button to generate and render a GUID.
 
 ### Graph Data Model
 - `Graph::test_graph` builds a sample node graph:
@@ -62,7 +58,7 @@ This file is AI-generated and contains implementation details, project structure
   - pressed/hover styling
   - removing a node clears inbound connections
 - Each node has a small panel under the title with a compact `cache` button (turns yellow when active) that toggles `Node::cache_output`.
-- Under the cache row, nodes can display status indicators: `has_cached_output` and `terminal` are shown as small colored circles with labels (read-only).
+- Status indicators are small colored circles placed to the left of the `x` button with tooltips (read-only): `has_cached_output` and `terminal`.
 
 #### Ports + Connections
 - Inputs/outputs are rendered as circular ports; hover brightens color.
