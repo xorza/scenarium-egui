@@ -27,6 +27,9 @@ pub struct Node {
     pub inputs: Vec<Input>,
     pub outputs: Vec<Output>,
     pub cache_output: bool,
+    pub has_cached_output: bool,
+    // node has side effects, besides calculation it's output. e.g. saving re
+    pub terminal: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize)]
