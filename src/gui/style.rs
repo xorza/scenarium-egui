@@ -66,4 +66,101 @@ impl GraphStyle {
             selected_stroke,
         }
     }
+
+    pub fn validate(&self) {
+        assert!(self.scale.is_finite(), "style scale must be finite");
+        assert!(self.scale > 0.0, "style scale must be positive");
+        assert!(
+            self.header_text_offset.is_finite(),
+            "header text offset must be finite"
+        );
+        assert!(
+            self.cache_button_width_factor.is_finite(),
+            "cache button width factor must be finite"
+        );
+        assert!(
+            self.cache_button_width_factor > 0.0,
+            "cache button width factor must be positive"
+        );
+        assert!(
+            self.cache_button_vertical_pad_factor.is_finite(),
+            "cache button vertical padding factor must be finite"
+        );
+        assert!(
+            self.cache_button_vertical_pad_factor >= 0.0,
+            "cache button vertical padding factor must be non-negative"
+        );
+        assert!(
+            self.cache_button_text_pad_factor.is_finite(),
+            "cache button text padding factor must be finite"
+        );
+        assert!(
+            self.cache_button_text_pad_factor >= 0.0,
+            "cache button text padding factor must be non-negative"
+        );
+        assert!(
+            self.dotted_base_spacing.is_finite(),
+            "dot spacing base must be finite"
+        );
+        assert!(
+            self.dotted_base_spacing > 0.0,
+            "dot spacing base must be positive"
+        );
+        assert!(
+            self.dotted_radius_base.is_finite(),
+            "dot radius base must be finite"
+        );
+        assert!(
+            self.dotted_radius_base > 0.0,
+            "dot radius base must be positive"
+        );
+        assert!(
+            self.dotted_radius_min.is_finite(),
+            "dot radius min must be finite"
+        );
+        assert!(
+            self.dotted_radius_min >= 0.0,
+            "dot radius min must be non-negative"
+        );
+        assert!(
+            self.dotted_radius_max.is_finite(),
+            "dot radius max must be finite"
+        );
+        assert!(
+            self.dotted_radius_max >= self.dotted_radius_min,
+            "dot radius max must be >= min"
+        );
+        assert!(
+            self.connection_stroke.width.is_finite(),
+            "connection stroke width must be finite"
+        );
+        assert!(
+            self.connection_stroke.width >= 0.0,
+            "connection stroke width must be non-negative"
+        );
+        assert!(
+            self.connection_highlight_stroke.width.is_finite(),
+            "connection highlight stroke width must be finite"
+        );
+        assert!(
+            self.connection_highlight_stroke.width >= 0.0,
+            "connection highlight stroke width must be non-negative"
+        );
+        assert!(
+            self.temp_connection_stroke.width.is_finite(),
+            "temp connection stroke width must be finite"
+        );
+        assert!(
+            self.temp_connection_stroke.width >= 0.0,
+            "temp connection stroke width must be non-negative"
+        );
+        assert!(
+            self.breaker_stroke.width.is_finite(),
+            "breaker stroke width must be finite"
+        );
+        assert!(
+            self.breaker_stroke.width >= 0.0,
+            "breaker stroke width must be non-negative"
+        );
+    }
 }

@@ -83,6 +83,7 @@ impl<'a> RenderContext<'a> {
         let body_font = node::scaled_font(ui, egui::TextStyle::Body, graph.zoom);
         let text_color = ui.visuals().text_color();
         let style = GraphStyle::new(ui, graph.zoom);
+        style.validate();
         let node_widths = node::compute_node_widths(
             painter,
             graph,

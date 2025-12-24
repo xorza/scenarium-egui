@@ -467,30 +467,6 @@ pub(crate) fn compute_node_widths(
     style: &crate::gui::style::GraphStyle,
 ) -> HashMap<Uuid, f32> {
     layout.assert_valid();
-    assert!(
-        style.cache_button_width_factor.is_finite(),
-        "cache button width factor must be finite"
-    );
-    assert!(
-        style.cache_button_width_factor > 0.0,
-        "cache button width factor must be positive"
-    );
-    assert!(
-        style.cache_button_text_pad_factor.is_finite(),
-        "cache button text padding factor must be finite"
-    );
-    assert!(
-        style.cache_button_text_pad_factor >= 0.0,
-        "cache button text padding factor must be non-negative"
-    );
-    assert!(
-        style.cache_button_vertical_pad_factor.is_finite(),
-        "cache button vertical padding factor must be finite"
-    );
-    assert!(
-        style.cache_button_vertical_pad_factor >= 0.0,
-        "cache button vertical padding factor must be non-negative"
-    );
     let scale_guess = layout.row_height / 18.0;
     assert!(scale_guess.is_finite(), "layout scale guess must be finite");
     assert!(scale_guess > 0.0, "layout scale guess must be positive");
