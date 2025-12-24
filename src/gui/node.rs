@@ -2,7 +2,7 @@ use eframe::egui;
 use std::collections::HashMap;
 use uuid::Uuid;
 
-use crate::model;
+use crate::{gui::render::RenderContext, model};
 
 #[derive(Debug)]
 pub struct NodeLayout {
@@ -77,54 +77,34 @@ pub(crate) fn port_radius_for_scale(scale: f32) -> f32 {
     radius
 }
 
-pub fn render_nodes(
-    ui: &mut egui::Ui,
-    graph: &mut model::Graph,
-    layout: &NodeLayout,
-    node_widths: &HashMap<Uuid, f32>,
-) {
-    let rect = ui.available_rect_before_wrap();
-    let painter = ui.painter_at(rect);
-    let origin = rect.min + graph.pan;
-    layout.assert_valid();
-    assert!(graph.zoom > 0.0, "graph zoom must be positive");
-    assert!(graph.zoom.is_finite(), "graph zoom must be finite");
-
-    let visuals = ui.visuals();
-    let text_color = visuals.text_color();
+pub fn render_node_bodies(ctx: &RenderContext, graph: &mut model::Graph) -> Option<Uuid> {
+    let visuals = ctx.ui().visuals();
     let node_fill = visuals.widgets.noninteractive.bg_fill;
     let node_stroke = visuals.widgets.noninteractive.bg_stroke;
     let selected_stroke =
         egui::Stroke::new(node_stroke.width.max(2.0), visuals.selection.stroke.color);
-    let input_port_color = egui::Color32::from_rgb(70, 150, 255);
-    let output_port_color = egui::Color32::from_rgb(70, 200, 200);
-    let input_hover_color = egui::Color32::from_rgb(120, 190, 255);
-    let output_hover_color = egui::Color32::from_rgb(110, 230, 210);
-    let heading_font = scaled_font(ui, egui::TextStyle::Heading, graph.zoom);
-    let body_font = scaled_font(ui, egui::TextStyle::Body, graph.zoom);
-    let header_text_offset = 4.0 * graph.zoom;
-    let port_radius = port_radius_for_scale(graph.zoom);
     let mut selection_request = None;
 
     for node in &mut graph.nodes {
-        let node_width = node_widths
-            .get(&node.id)
-            .copied()
-            .expect("node width must be precomputed");
-        let node_size = node_size(node, layout, node_width);
+        let node_width = ctx.node_width(node.id);
+        let node_size = node_size(node, &ctx.layout, node_width);
         let node_rect =
-            egui::Rect::from_min_size(origin + node.pos.to_vec2() * graph.zoom, node_size);
-        let header_rect =
-            egui::Rect::from_min_size(node_rect.min, egui::vec2(node_size.x, layout.header_height));
+            egui::Rect::from_min_size(ctx.origin + node.pos.to_vec2() * ctx.scale, node_size);
+        let header_rect = egui::Rect::from_min_size(
+            node_rect.min,
+            egui::vec2(node_size.x, ctx.layout.header_height),
+        );
 
-        let node_id = ui.make_persistent_id(("node_body", node.id));
-        let body_response = ui.interact(node_rect, node_id, egui::Sense::click());
+        let node_id = ctx.ui().make_persistent_id(("node_body", node.id));
+        let body_response = ctx.ui().interact(node_rect, node_id, egui::Sense::click());
 
-        let header_id = ui.make_persistent_id(("node_header", node.id));
-        let response = ui.interact(header_rect, header_id, egui::Sense::drag());
+        let header_id = ctx.ui().make_persistent_id(("node_header", node.id));
+        let response = ctx
+            .ui()
+            .interact(header_rect, header_id, egui::Sense::drag());
 
         if response.dragged() {
-            node.pos += response.drag_delta() / graph.zoom;
+            node.pos += response.drag_delta() / ctx.scale;
         }
 
         if response.clicked() || response.dragged() || body_response.clicked() {
@@ -134,9 +114,9 @@ pub fn render_nodes(
         let selected_id = selection_request.or(graph.selected_node_id);
         let is_selected = selected_id.is_some_and(|id| id == node.id);
 
-        painter.rect(
+        ctx.painter().rect(
             node_rect,
-            layout.corner_radius,
+            ctx.layout.corner_radius,
             node_fill,
             if is_selected {
                 selected_stroke
@@ -145,78 +125,101 @@ pub fn render_nodes(
             },
             egui::StrokeKind::Inside,
         );
+    }
+
+    selection_request
+}
+
+pub fn render_ports(ctx: &RenderContext, graph: &model::Graph) {
+    let input_port_color = egui::Color32::from_rgb(70, 150, 255);
+    let output_port_color = egui::Color32::from_rgb(70, 200, 200);
+    let input_hover_color = egui::Color32::from_rgb(120, 190, 255);
+    let output_hover_color = egui::Color32::from_rgb(110, 230, 210);
+
+    for node in &graph.nodes {
+        let node_width = ctx.node_width(node.id);
 
         for (index, _input) in node.inputs.iter().enumerate() {
-            let center = node_input_pos(origin, node, index, layout, graph.zoom);
+            let center = node_input_pos(ctx.origin, node, index, &ctx.layout, ctx.scale);
 
             let port_rect = egui::Rect::from_center_size(
                 center,
-                egui::vec2(port_radius * 2.0, port_radius * 2.0),
+                egui::vec2(ctx.port_radius * 2.0, ctx.port_radius * 2.0),
             );
-            let color = if ui.rect_contains_pointer(port_rect) {
+            let color = if ctx.ui().rect_contains_pointer(port_rect) {
                 input_hover_color
             } else {
                 input_port_color
             };
-            painter.circle_filled(center, port_radius, color);
+            ctx.painter().circle_filled(center, ctx.port_radius, color);
         }
 
         for (index, _output) in node.outputs.iter().enumerate() {
-            let center = node_output_pos(origin, node, index, layout, graph.zoom, node_width);
+            let center =
+                node_output_pos(ctx.origin, node, index, &ctx.layout, ctx.scale, node_width);
 
             let port_rect = egui::Rect::from_center_size(
                 center,
-                egui::vec2(port_radius * 2.0, port_radius * 2.0),
+                egui::vec2(ctx.port_radius * 2.0, ctx.port_radius * 2.0),
             );
-            let color = if ui.rect_contains_pointer(port_rect) {
+            let color = if ctx.ui().rect_contains_pointer(port_rect) {
                 output_hover_color
             } else {
                 output_port_color
             };
-            painter.circle_filled(center, port_radius, color);
+            ctx.painter().circle_filled(center, ctx.port_radius, color);
         }
+    }
+}
 
-        painter.text(
-            node_rect.min + egui::vec2(layout.padding, header_text_offset),
+pub fn render_node_labels(ctx: &RenderContext, graph: &model::Graph) {
+    let header_text_offset = 4.0 * ctx.scale;
+
+    for node in &graph.nodes {
+        let node_rect = ctx.node_rect(node);
+        let node_width = ctx.node_width(node.id);
+
+        ctx.painter().text(
+            node_rect.min + egui::vec2(ctx.layout.padding, header_text_offset),
             egui::Align2::LEFT_TOP,
             &node.name,
-            heading_font.clone(),
-            text_color,
+            ctx.heading_font.clone(),
+            ctx.text_color,
         );
 
         for (index, input) in node.inputs.iter().enumerate() {
             let text_pos = node_rect.min
                 + egui::vec2(
-                    layout.padding,
-                    layout.header_height + layout.padding + layout.row_height * index as f32,
+                    ctx.layout.padding,
+                    ctx.layout.header_height
+                        + ctx.layout.padding
+                        + ctx.layout.row_height * index as f32,
                 );
-            painter.text(
+            ctx.painter().text(
                 text_pos,
                 egui::Align2::LEFT_TOP,
                 &input.name,
-                body_font.clone(),
-                text_color,
+                ctx.body_font.clone(),
+                ctx.text_color,
             );
         }
 
         for (index, output) in node.outputs.iter().enumerate() {
             let text_pos = node_rect.min
                 + egui::vec2(
-                    node_width - layout.padding,
-                    layout.header_height + layout.padding + layout.row_height * index as f32,
+                    node_width - ctx.layout.padding,
+                    ctx.layout.header_height
+                        + ctx.layout.padding
+                        + ctx.layout.row_height * index as f32,
                 );
-            painter.text(
+            ctx.painter().text(
                 text_pos,
                 egui::Align2::RIGHT_TOP,
                 &output.name,
-                body_font.clone(),
-                text_color,
+                ctx.body_font.clone(),
+                ctx.text_color,
             );
         }
-    }
-
-    if let Some(selected_id) = selection_request {
-        graph.select_node(selected_id);
     }
 }
 

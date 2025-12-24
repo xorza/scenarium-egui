@@ -1,6 +1,12 @@
 use eframe::egui;
 
-use crate::{gui::node, model};
+use crate::{
+    gui::{
+        node,
+        render::{RenderContext, WidgetRenderer},
+    },
+    model,
+};
 use std::collections::HashSet;
 use uuid::Uuid;
 
@@ -101,56 +107,36 @@ impl GraphUi {
 
         let rect = ui.available_rect_before_wrap();
         let painter = ui.painter_at(rect);
-        assert!(graph.zoom.is_finite(), "graph zoom must be finite");
-        assert!(graph.zoom > 0.0, "graph zoom must be positive");
-
-        let layout = node::NodeLayout::default().scaled(graph.zoom);
-        layout.assert_valid();
-        let heading_font = node::scaled_font(ui, egui::TextStyle::Heading, graph.zoom);
-        let body_font = node::scaled_font(ui, egui::TextStyle::Body, graph.zoom);
-        let text_color = ui.visuals().text_color();
-        let node_widths = node::compute_node_widths(
-            &painter,
-            graph,
-            &layout,
-            &heading_font,
-            &body_font,
-            text_color,
-        );
+        let input_ctx = RenderContext::new(ui, &painter, rect, graph);
 
         let pointer_pos = ui.input(|input| input.pointer.hover_pos());
-        let pointer_in_rect = pointer_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
+        let pointer_in_rect = pointer_pos
+            .map(|pos| input_ctx.rect.contains(pos))
+            .unwrap_or(false);
         let middle_down = ui.input(|input| input.pointer.middle_down());
         let pointer_delta = ui.input(|input| input.pointer.delta());
-        let input_origin = rect.min + graph.pan;
-        let input_port_radius = node::port_radius_for_scale(graph.zoom);
-        let port_activation = (input_port_radius * 1.6).max(10.0);
-        let ports = collect_ports(graph, input_origin, &layout, &node_widths);
+        let port_activation = (input_ctx.port_radius * 1.6).max(10.0);
+        let ports = collect_ports(
+            graph,
+            input_ctx.origin,
+            &input_ctx.layout,
+            &input_ctx.node_widths,
+        );
         let hovered_port = pointer_pos
-            .filter(|pos| rect.contains(*pos))
+            .filter(|pos| input_ctx.rect.contains(*pos))
             .and_then(|pos| find_port_near(&ports, pos, port_activation));
         let hovered_port_ref = hovered_port.as_ref();
         let pointer_over_node = pointer_pos
-            .filter(|pos| rect.contains(*pos))
+            .filter(|pos| input_ctx.rect.contains(*pos))
             .is_some_and(|pos| {
                 graph.nodes.iter().any(|node| {
-                    let node_width = node_widths
-                        .get(&node.id)
-                        .copied()
-                        .expect("node width must be precomputed");
-                    let node_rect = node::node_rect_for_graph(
-                        input_origin,
-                        node,
-                        graph.zoom,
-                        &layout,
-                        node_width,
-                    );
+                    let node_rect = input_ctx.node_rect(node);
                     node_rect.contains(pos)
                 })
             });
         let pan_id = ui.make_persistent_id("graph_pan");
         let pan_response = ui.interact(
-            rect,
+            input_ctx.rect,
             pan_id,
             if breaker.active
                 || connection_drag.active
@@ -238,7 +224,9 @@ impl GraphUi {
             }
         }
 
-        let zoom_active = pointer_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
+        let zoom_active = pointer_pos
+            .map(|pos| input_ctx.rect.contains(pos))
+            .unwrap_or(false);
 
         if zoom_active {
             let modifiers = ui.input(|input| input.modifiers);
@@ -258,8 +246,8 @@ impl GraphUi {
                 assert!(clamped_zoom.is_finite(), "clamped zoom must be finite");
 
                 if (clamped_zoom - graph.zoom).abs() > f32::EPSILON {
-                    let cursor = pointer_pos.unwrap_or_else(|| rect.center());
-                    let origin = rect.min;
+                    let cursor = pointer_pos.unwrap_or_else(|| input_ctx.rect.center());
+                    let origin = input_ctx.rect.min;
                     let graph_pos = (cursor - origin - graph.pan) / graph.zoom;
 
                     graph.zoom = clamped_zoom;
@@ -270,19 +258,22 @@ impl GraphUi {
             }
         }
 
-        let render_origin = rect.min + graph.pan;
-        draw_dotted_background(&painter, rect, graph);
-        let curves = collect_connection_curves(graph, render_origin, &layout, &node_widths);
-        let highlighted = if breaker.active && breaker.points.len() > 1 {
-            connection_hits(&curves, &breaker.points)
-        } else {
-            HashSet::new()
-        };
-        draw_connections(&painter, &curves, &highlighted);
+        let ctx = RenderContext::new(ui, &painter, rect, graph);
+        let render_origin = ctx.rect.min + graph.pan;
+        let mut background = BackgroundRenderer;
+        let mut connections = ConnectionRenderer::default();
+        let mut node_bodies = NodeBodyRenderer;
+        let mut ports = PortRenderer;
+        let mut labels = NodeLabelRenderer;
+
+        background.render(&ctx, graph);
+        connections.rebuild(graph, render_origin, &ctx.layout, &ctx.node_widths, breaker);
+        connections.render(&ctx, graph);
 
         if breaker.active && breaker.points.len() > 1 {
             let breaker_stroke = egui::Stroke::new(2.5, egui::Color32::from_rgb(255, 120, 120));
-            painter.add(egui::Shape::line(breaker.points.clone(), breaker_stroke));
+            ctx.painter()
+                .add(egui::Shape::line(breaker.points.clone(), breaker_stroke));
         }
 
         if connection_drag.active {
@@ -294,7 +285,7 @@ impl GraphUi {
                 .map(|port| port.center)
                 .unwrap_or(connection_drag.current_pos);
             draw_temporary_connection(
-                &painter,
+                ctx.painter(),
                 graph.zoom,
                 connection_drag.start_pos,
                 end_pos,
@@ -302,10 +293,12 @@ impl GraphUi {
             );
         }
 
-        node::render_nodes(ui, graph, &layout, &node_widths);
+        let selection_request = node_bodies.render(&ctx, graph);
+        ports.render(&ctx, graph);
+        labels.render(&ctx, graph);
 
         if breaker.active && primary_released {
-            remove_connections(graph, &highlighted);
+            remove_connections(graph, connections.highlighted());
             breaker.reset();
         }
 
@@ -322,6 +315,90 @@ impl GraphUi {
             }
             connection_drag.reset();
         }
+
+        if let Some(selected_id) = selection_request {
+            graph.select_node(selected_id);
+        }
+    }
+}
+
+#[derive(Debug)]
+struct BackgroundRenderer;
+
+impl WidgetRenderer for BackgroundRenderer {
+    type Output = ();
+
+    fn render(&mut self, ctx: &RenderContext, graph: &mut model::Graph) -> Self::Output {
+        draw_dotted_background(ctx.painter(), ctx.rect, graph);
+    }
+}
+
+#[derive(Debug, Default)]
+struct ConnectionRenderer {
+    curves: Vec<ConnectionCurve>,
+    highlighted: HashSet<ConnectionKey>,
+}
+
+impl ConnectionRenderer {
+    fn rebuild(
+        &mut self,
+        graph: &model::Graph,
+        origin: egui::Pos2,
+        layout: &node::NodeLayout,
+        node_widths: &std::collections::HashMap<Uuid, f32>,
+        breaker: &ConnectionBreaker,
+    ) {
+        self.curves = collect_connection_curves(graph, origin, layout, node_widths);
+        self.highlighted = if breaker.active && breaker.points.len() > 1 {
+            connection_hits(&self.curves, &breaker.points)
+        } else {
+            HashSet::new()
+        };
+    }
+
+    fn highlighted(&self) -> &HashSet<ConnectionKey> {
+        &self.highlighted
+    }
+}
+
+impl WidgetRenderer for ConnectionRenderer {
+    type Output = ();
+
+    fn render(&mut self, ctx: &RenderContext, _graph: &mut model::Graph) -> Self::Output {
+        draw_connections(ctx.painter(), &self.curves, &self.highlighted);
+    }
+}
+
+#[derive(Debug)]
+struct NodeBodyRenderer;
+
+impl WidgetRenderer for NodeBodyRenderer {
+    type Output = Option<Uuid>;
+
+    fn render(&mut self, ctx: &RenderContext, graph: &mut model::Graph) -> Self::Output {
+        node::render_node_bodies(ctx, graph)
+    }
+}
+
+#[derive(Debug)]
+struct PortRenderer;
+
+impl WidgetRenderer for PortRenderer {
+    type Output = ();
+
+    fn render(&mut self, ctx: &RenderContext, graph: &mut model::Graph) -> Self::Output {
+        node::render_ports(ctx, graph);
+    }
+}
+
+#[derive(Debug)]
+struct NodeLabelRenderer;
+
+impl WidgetRenderer for NodeLabelRenderer {
+    type Output = ();
+
+    fn render(&mut self, ctx: &RenderContext, graph: &mut model::Graph) -> Self::Output {
+        node::render_node_labels(ctx, graph);
     }
 }
 
