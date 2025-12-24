@@ -247,12 +247,10 @@ impl GraphUi {
             assert!(scroll_delta.x.is_finite(), "scroll delta x must be finite");
             assert!(scroll_delta.y.is_finite(), "scroll delta y must be finite");
 
-            if modifiers.command || modifiers.ctrl {
-                if scroll_delta.y.abs() > f32::EPSILON {
-                    let scroll_zoom = (scroll_delta.y * 0.002).exp();
-                    assert!(scroll_zoom.is_finite(), "scroll zoom factor must be finite");
-                    zoom_delta *= scroll_zoom;
-                }
+            if (modifiers.command || modifiers.ctrl) && scroll_delta.y.abs() > f32::EPSILON {
+                let scroll_zoom = (scroll_delta.y * 0.002).exp();
+                assert!(scroll_zoom.is_finite(), "scroll zoom factor must be finite");
+                zoom_delta *= scroll_zoom;
             }
 
             if (zoom_delta - 1.0).abs() > f32::EPSILON {
