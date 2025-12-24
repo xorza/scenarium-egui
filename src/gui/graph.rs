@@ -105,9 +105,31 @@ impl GraphUi {
         let breaker = &mut self.connection_breaker;
         let connection_drag = &mut self.connection_drag;
 
+        let mut fit_all = false;
+        let mut view_selected = false;
+        let mut reset_view = false;
+        ui.horizontal(|ui| {
+            fit_all = ui.button("Fit all").clicked();
+            view_selected = ui.button("View selected").clicked();
+            reset_view = ui.button("Reset view").clicked();
+        });
+
         let rect = ui.available_rect_before_wrap();
         let painter = ui.painter_at(rect);
         let input_ctx = RenderContext::new(ui, &painter, rect, graph);
+
+        if reset_view {
+            graph.zoom = 1.0;
+            graph.pan = egui::Vec2::ZERO;
+        }
+
+        if view_selected {
+            view_selected_node(ui, &painter, rect, graph);
+        }
+
+        if fit_all {
+            fit_all_nodes(ui, &painter, rect, graph);
+        }
 
         let pointer_pos = ui.input(|input| input.pointer.hover_pos());
         let pointer_in_rect = pointer_pos
@@ -625,6 +647,105 @@ fn apply_connection(graph: &mut model::Graph, start: PortRef, end: PortRef) {
     });
 }
 
+fn view_selected_node(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    graph: &mut model::Graph,
+) {
+    let Some(selected_id) = graph.selected_node_id else {
+        return;
+    };
+    let Some(node) = graph.nodes.iter().find(|node| node.id == selected_id) else {
+        return;
+    };
+
+    let (layout, node_widths) = compute_layout_and_widths(ui, painter, graph, 1.0);
+    let node_width = node_widths
+        .get(&node.id)
+        .copied()
+        .expect("node width must be precomputed");
+    let size = node::node_rect_for_graph(egui::Pos2::ZERO, node, 1.0, &layout, node_width).size();
+    let center = node.pos.to_vec2() + size * 0.5;
+    graph.zoom = 1.0;
+    graph.pan = rect.center() - rect.min - center;
+}
+
+fn fit_all_nodes(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    rect: egui::Rect,
+    graph: &mut model::Graph,
+) {
+    if graph.nodes.is_empty() {
+        graph.zoom = 1.0;
+        graph.pan = egui::Vec2::ZERO;
+        return;
+    }
+
+    let (layout, node_widths) = compute_layout_and_widths(ui, painter, graph, 1.0);
+    let mut min = egui::pos2(f32::INFINITY, f32::INFINITY);
+    let mut max = egui::pos2(f32::NEG_INFINITY, f32::NEG_INFINITY);
+
+    for node in &graph.nodes {
+        let node_width = node_widths
+            .get(&node.id)
+            .copied()
+            .expect("node width must be precomputed");
+        let rect = node::node_rect_for_graph(egui::Pos2::ZERO, node, 1.0, &layout, node_width);
+        min.x = min.x.min(rect.min.x);
+        min.y = min.y.min(rect.min.y);
+        max.x = max.x.max(rect.max.x);
+        max.y = max.y.max(rect.max.y);
+    }
+
+    let bounds_size = max - min;
+    assert!(bounds_size.x.is_finite(), "bounds width must be finite");
+    assert!(bounds_size.y.is_finite(), "bounds height must be finite");
+
+    let padding = 24.0;
+    let available = rect.size() - egui::vec2(padding * 2.0, padding * 2.0);
+    let zoom_x = if bounds_size.x > 0.0 {
+        available.x / bounds_size.x
+    } else {
+        1.0
+    };
+    let zoom_y = if bounds_size.y > 0.0 {
+        available.y / bounds_size.y
+    } else {
+        1.0
+    };
+    let target_zoom = zoom_x.min(zoom_y).clamp(MIN_ZOOM, MAX_ZOOM);
+    graph.zoom = target_zoom;
+
+    let bounds_center = (min.to_vec2() + max.to_vec2()) * 0.5;
+    graph.pan = rect.center() - rect.min - bounds_center * graph.zoom;
+}
+
+fn compute_layout_and_widths(
+    ui: &egui::Ui,
+    painter: &egui::Painter,
+    graph: &model::Graph,
+    scale: f32,
+) -> (node::NodeLayout, std::collections::HashMap<Uuid, f32>) {
+    let layout = node::NodeLayout::default().scaled(scale);
+    layout.assert_valid();
+    let heading_font = node::scaled_font(ui, egui::TextStyle::Heading, scale);
+    let body_font = node::scaled_font(ui, egui::TextStyle::Body, scale);
+    let text_color = ui.visuals().text_color();
+    let style = crate::gui::style::GraphStyle::new(ui, scale);
+    style.validate();
+    let widths = node::compute_node_widths(
+        painter,
+        graph,
+        &layout,
+        &heading_font,
+        &body_font,
+        text_color,
+        &style,
+    );
+    (layout, widths)
+}
 fn draw_connections(
     painter: &egui::Painter,
     curves: &[ConnectionCurve],
