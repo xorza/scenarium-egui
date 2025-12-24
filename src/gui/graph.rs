@@ -132,6 +132,7 @@ impl GraphUi {
         }
 
         let pointer_pos = ui.input(|input| input.pointer.hover_pos());
+        let cursor_pos = ui.ctx().pointer_latest_pos().or(pointer_pos);
         let pointer_in_rect = pointer_pos
             .map(|pos| input_ctx.rect.contains(pos))
             .unwrap_or(false);
@@ -246,19 +247,37 @@ impl GraphUi {
             }
         }
 
-        let zoom_active = pointer_pos
-            .map(|pos| input_ctx.rect.contains(pos))
-            .unwrap_or(false);
+        let zoom_active = cursor_pos.is_some_and(|pos| input_ctx.rect.contains(pos));
 
         if zoom_active {
             let modifiers = ui.input(|input| input.modifiers);
-            let scroll_delta = ui.input(|input| input.smooth_scroll_delta);
+            let scroll_delta = ui.input(|input| input.raw_scroll_delta);
             let mut zoom_delta = ui.input(|input| input.zoom_delta());
+            let wheel_delta = ui.input(|input| {
+                input
+                    .events
+                    .iter()
+                    .fold(egui::Vec2::ZERO, |acc, event| match event {
+                        egui::Event::MouseWheel {
+                            unit: egui::MouseWheelUnit::Line | egui::MouseWheelUnit::Page,
+                            delta,
+                            ..
+                        } => acc + *delta,
+                        _ => acc,
+                    })
+            });
+            let wheel_scroll = wheel_delta.length_sq() > f32::EPSILON;
             assert!(scroll_delta.x.is_finite(), "scroll delta x must be finite");
             assert!(scroll_delta.y.is_finite(), "scroll delta y must be finite");
+            assert!(wheel_delta.x.is_finite(), "wheel delta x must be finite");
+            assert!(wheel_delta.y.is_finite(), "wheel delta y must be finite");
 
-            if (modifiers.command || modifiers.ctrl) && scroll_delta.y.abs() > f32::EPSILON {
-                let scroll_zoom = (scroll_delta.y * 0.002).exp();
+            if wheel_scroll && wheel_delta.y.abs() > f32::EPSILON {
+                let wheel_zoom = (wheel_delta.y * 0.06).exp();
+                assert!(wheel_zoom.is_finite(), "wheel zoom factor must be finite");
+                zoom_delta *= wheel_zoom;
+            } else if (modifiers.command || modifiers.ctrl) && scroll_delta.y.abs() > f32::EPSILON {
+                let scroll_zoom = (scroll_delta.y * 0.003).exp();
                 assert!(scroll_zoom.is_finite(), "scroll zoom factor must be finite");
                 zoom_delta *= scroll_zoom;
             }
@@ -268,14 +287,18 @@ impl GraphUi {
                 assert!(clamped_zoom.is_finite(), "clamped zoom must be finite");
 
                 if (clamped_zoom - graph.zoom).abs() > f32::EPSILON {
-                    let cursor = pointer_pos.unwrap_or_else(|| input_ctx.rect.center());
+                    let cursor = cursor_pos.expect("cursor position must exist while zooming");
+                    assert!(
+                        input_ctx.rect.contains(cursor),
+                        "cursor must be inside graph rect while zooming"
+                    );
                     let origin = input_ctx.rect.min;
                     let graph_pos = (cursor - origin - graph.pan) / graph.zoom;
 
                     graph.zoom = clamped_zoom;
                     graph.pan = cursor - origin - graph_pos * graph.zoom;
                 }
-            } else if scroll_delta.length_sq() > f32::EPSILON {
+            } else if !wheel_scroll && scroll_delta.length_sq() > f32::EPSILON {
                 graph.pan += scroll_delta;
             }
         }

@@ -69,8 +69,9 @@ This file is AI-generated and contains implementation details, project structure
 #### Panning + Zooming
 - Dragging empty space pans the graph.
 - Middle mouse drag also pans.
-- Touchpad/scroll wheel pans when cursor is over the graph.
-- Pinch-to-zoom (trackpad) or Ctrl/Cmd + scroll zooms, centered on cursor.
+- Touchpad scroll pans when cursor is over the graph.
+- Mouse wheel zooms when cursor is over the graph (faster).
+- Pinch-to-zoom (trackpad) or Ctrl/Cmd + scroll zooms, centered on cursor (faster).
 - Graph toolbar buttons: **Fit all** (frames all nodes), **View selected** (centers selected node and resets zoom to 1), **Reset view** (pan=0, zoom=1).
 
 #### Breaker Tool
