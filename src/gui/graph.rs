@@ -104,6 +104,20 @@ impl GraphUi {
         assert!(graph.zoom.is_finite(), "graph zoom must be finite");
         assert!(graph.zoom > 0.0, "graph zoom must be positive");
 
+        let layout = node::NodeLayout::default().scaled(graph.zoom);
+        layout.assert_valid();
+        let heading_font = node::scaled_font(ui, egui::TextStyle::Heading, graph.zoom);
+        let body_font = node::scaled_font(ui, egui::TextStyle::Body, graph.zoom);
+        let text_color = ui.visuals().text_color();
+        let node_widths = node::compute_node_widths(
+            &painter,
+            graph,
+            &layout,
+            &heading_font,
+            &body_font,
+            text_color,
+        );
+
         let pointer_pos = ui.input(|input| input.pointer.hover_pos());
         let pointer_in_rect = pointer_pos.map(|pos| rect.contains(pos)).unwrap_or(false);
         let middle_down = ui.input(|input| input.pointer.middle_down());
@@ -111,9 +125,7 @@ impl GraphUi {
         let input_origin = rect.min + graph.pan;
         let input_port_radius = node::port_radius_for_scale(graph.zoom);
         let port_activation = (input_port_radius * 1.6).max(10.0);
-        let input_layout = node::NodeLayout::default().scaled(graph.zoom);
-        input_layout.assert_valid();
-        let ports = collect_ports(graph, input_origin, &input_layout);
+        let ports = collect_ports(graph, input_origin, &layout, &node_widths);
         let hovered_port = pointer_pos
             .filter(|pos| rect.contains(*pos))
             .and_then(|pos| find_port_near(&ports, pos, port_activation));
@@ -122,7 +134,17 @@ impl GraphUi {
             .filter(|pos| rect.contains(*pos))
             .is_some_and(|pos| {
                 graph.nodes.iter().any(|node| {
-                    let node_rect = node::node_rect_for_graph(input_origin, node, graph.zoom);
+                    let node_width = node_widths
+                        .get(&node.id)
+                        .copied()
+                        .expect("node width must be precomputed");
+                    let node_rect = node::node_rect_for_graph(
+                        input_origin,
+                        node,
+                        graph.zoom,
+                        &layout,
+                        node_width,
+                    );
                     node_rect.contains(pos)
                 })
             });
@@ -242,10 +264,8 @@ impl GraphUi {
         }
 
         let render_origin = rect.min + graph.pan;
-        let render_layout = node::NodeLayout::default().scaled(graph.zoom);
-        render_layout.assert_valid();
         draw_dotted_background(&painter, rect, graph);
-        let curves = collect_connection_curves(graph, render_origin, &render_layout);
+        let curves = collect_connection_curves(graph, render_origin, &layout, &node_widths);
         let highlighted = if breaker.active && breaker.points.len() > 1 {
             connection_hits(&curves, &breaker.points)
         } else {
@@ -275,7 +295,7 @@ impl GraphUi {
             );
         }
 
-        node::render_nodes(ui, graph);
+        node::render_nodes(ui, graph, &layout, &node_widths);
 
         if breaker.active && primary_released {
             remove_connections(graph, &highlighted);
@@ -338,6 +358,7 @@ fn collect_connection_curves(
     graph: &model::Graph,
     origin: egui::Pos2,
     layout: &node::NodeLayout,
+    node_widths: &std::collections::HashMap<Uuid, f32>,
 ) -> Vec<ConnectionCurve> {
     let node_lookup: std::collections::HashMap<_, _> =
         graph.nodes.iter().map(|node| (node.id, node)).collect();
@@ -351,12 +372,17 @@ fn collect_connection_curves(
             let source_node = node_lookup
                 .get(&connection.node_id)
                 .expect("graph validation must guarantee source nodes exist");
+            let source_width = node_widths
+                .get(&connection.node_id)
+                .copied()
+                .expect("node width must be precomputed");
             let start = node::node_output_pos(
                 origin,
                 source_node,
                 connection.output_index,
                 layout,
                 graph.zoom,
+                source_width,
             );
             let end = node::node_input_pos(origin, node, input_index, layout, graph.zoom);
             let control_offset = node::bezier_control_offset(start, end, graph.zoom);
@@ -379,10 +405,15 @@ fn collect_ports(
     graph: &model::Graph,
     origin: egui::Pos2,
     layout: &node::NodeLayout,
+    node_widths: &std::collections::HashMap<Uuid, f32>,
 ) -> Vec<PortInfo> {
     let mut ports = Vec::new();
 
     for node in &graph.nodes {
+        let node_width = node_widths
+            .get(&node.id)
+            .copied()
+            .expect("node width must be precomputed");
         for (index, _input) in node.inputs.iter().enumerate() {
             let center = node::node_input_pos(origin, node, index, layout, graph.zoom);
 
@@ -396,7 +427,7 @@ fn collect_ports(
             });
         }
         for (index, _output) in node.outputs.iter().enumerate() {
-            let center = node::node_output_pos(origin, node, index, layout, graph.zoom);
+            let center = node::node_output_pos(origin, node, index, layout, graph.zoom, node_width);
 
             ports.push(PortInfo {
                 port: PortRef {

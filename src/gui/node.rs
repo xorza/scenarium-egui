@@ -1,4 +1,6 @@
 use eframe::egui;
+use std::collections::HashMap;
+use uuid::Uuid;
 
 use crate::model;
 
@@ -52,12 +54,17 @@ impl NodeLayout {
     }
 }
 
-pub fn node_rect_for_graph(origin: egui::Pos2, node: &model::Node, scale: f32) -> egui::Rect {
+pub fn node_rect_for_graph(
+    origin: egui::Pos2,
+    node: &model::Node,
+    scale: f32,
+    layout: &NodeLayout,
+    node_width: f32,
+) -> egui::Rect {
     assert!(scale > 0.0, "graph scale must be positive");
     assert!(scale.is_finite(), "graph scale must be finite");
-    let layout = NodeLayout::default().scaled(scale);
     layout.assert_valid();
-    let node_size = node_size(node, &layout);
+    let node_size = node_size(node, layout, node_width);
     egui::Rect::from_min_size(origin + node.pos.to_vec2() * scale, node_size)
 }
 
@@ -70,12 +77,15 @@ pub(crate) fn port_radius_for_scale(scale: f32) -> f32 {
     radius
 }
 
-pub fn render_nodes(ui: &mut egui::Ui, graph: &mut model::Graph) {
+pub fn render_nodes(
+    ui: &mut egui::Ui,
+    graph: &mut model::Graph,
+    layout: &NodeLayout,
+    node_widths: &HashMap<Uuid, f32>,
+) {
     let rect = ui.available_rect_before_wrap();
     let painter = ui.painter_at(rect);
     let origin = rect.min + graph.pan;
-    let layout = NodeLayout::default().scaled(graph.zoom);
-
     layout.assert_valid();
     assert!(graph.zoom > 0.0, "graph zoom must be positive");
     assert!(graph.zoom.is_finite(), "graph zoom must be finite");
@@ -97,7 +107,11 @@ pub fn render_nodes(ui: &mut egui::Ui, graph: &mut model::Graph) {
     let mut selection_request = None;
 
     for node in &mut graph.nodes {
-        let node_size = node_size(node, &layout);
+        let node_width = node_widths
+            .get(&node.id)
+            .copied()
+            .expect("node width must be precomputed");
+        let node_size = node_size(node, layout, node_width);
         let node_rect =
             egui::Rect::from_min_size(origin + node.pos.to_vec2() * graph.zoom, node_size);
         let header_rect =
@@ -133,7 +147,7 @@ pub fn render_nodes(ui: &mut egui::Ui, graph: &mut model::Graph) {
         );
 
         for (index, _input) in node.inputs.iter().enumerate() {
-            let center = node_input_pos(origin, node, index, &layout, graph.zoom);
+            let center = node_input_pos(origin, node, index, layout, graph.zoom);
 
             let port_rect = egui::Rect::from_center_size(
                 center,
@@ -148,7 +162,7 @@ pub fn render_nodes(ui: &mut egui::Ui, graph: &mut model::Graph) {
         }
 
         for (index, _output) in node.outputs.iter().enumerate() {
-            let center = node_output_pos(origin, node, index, &layout, graph.zoom);
+            let center = node_output_pos(origin, node, index, layout, graph.zoom, node_width);
 
             let port_rect = egui::Rect::from_center_size(
                 center,
@@ -188,7 +202,7 @@ pub fn render_nodes(ui: &mut egui::Ui, graph: &mut model::Graph) {
         for (index, output) in node.outputs.iter().enumerate() {
             let text_pos = node_rect.min
                 + egui::vec2(
-                    layout.node_width - layout.padding,
+                    node_width - layout.padding,
                     layout.header_height + layout.padding + layout.row_height * index as f32,
                 );
             painter.text(
@@ -206,13 +220,15 @@ pub fn render_nodes(ui: &mut egui::Ui, graph: &mut model::Graph) {
     }
 }
 
-fn node_size(node: &model::Node, layout: &NodeLayout) -> egui::Vec2 {
+fn node_size(node: &model::Node, layout: &NodeLayout, node_width: f32) -> egui::Vec2 {
+    assert!(node_width.is_finite(), "node width must be finite");
+    assert!(node_width > 0.0, "node width must be positive");
     let row_count = node.inputs.len().max(node.outputs.len()).max(1);
     let height = layout.header_height
         + layout.padding
         + layout.row_height * row_count as f32
         + layout.padding;
-    egui::vec2(layout.node_width, height)
+    egui::vec2(node_width, height)
 }
 
 pub(crate) fn node_input_pos(
@@ -242,19 +258,22 @@ pub(crate) fn node_output_pos(
     index: usize,
     layout: &NodeLayout,
     scale: f32,
+    node_width: f32,
 ) -> egui::Pos2 {
     assert!(
         index < node.outputs.len(),
         "output index must be within node outputs"
     );
     assert!(scale > 0.0, "graph scale must be positive");
+    assert!(node_width.is_finite(), "node width must be finite");
+    assert!(node_width > 0.0, "node width must be positive");
     let y = origin.y
         + node.pos.y * scale
         + layout.header_height
         + layout.padding
         + layout.row_height * index as f32
         + layout.row_height * 0.5;
-    egui::pos2(origin.x + node.pos.x * scale + layout.node_width, y)
+    egui::pos2(origin.x + node.pos.x * scale + node_width, y)
 }
 
 pub(crate) fn bezier_control_offset(start: egui::Pos2, end: egui::Pos2, scale: f32) -> f32 {
@@ -265,7 +284,60 @@ pub(crate) fn bezier_control_offset(start: egui::Pos2, end: egui::Pos2, scale: f
     offset
 }
 
-fn scaled_font(ui: &egui::Ui, style: egui::TextStyle, scale: f32) -> egui::FontId {
+pub(crate) fn compute_node_widths(
+    painter: &egui::Painter,
+    graph: &model::Graph,
+    layout: &NodeLayout,
+    heading_font: &egui::FontId,
+    body_font: &egui::FontId,
+    text_color: egui::Color32,
+) -> HashMap<Uuid, f32> {
+    layout.assert_valid();
+    let mut widths = HashMap::with_capacity(graph.nodes.len());
+
+    for node in &graph.nodes {
+        let header_width =
+            text_width(painter, heading_font, &node.name, text_color) + layout.padding * 2.0;
+
+        let input_widths: Vec<f32> = node
+            .inputs
+            .iter()
+            .map(|input| text_width(painter, body_font, &input.name, text_color))
+            .collect();
+        let output_widths: Vec<f32> = node
+            .outputs
+            .iter()
+            .map(|output| text_width(painter, body_font, &output.name, text_color))
+            .collect();
+
+        let row_count = node.inputs.len().max(node.outputs.len()).max(1);
+        let mut max_row_width: f32 = 0.0;
+
+        let inter_side_padding = 0.0;
+        for row in 0..row_count {
+            let left = input_widths.get(row).copied().unwrap_or(0.0);
+            let right = output_widths.get(row).copied().unwrap_or(0.0);
+            let mut row_width = layout.padding * 2.0 + left + right;
+            if left > 0.0 && right > 0.0 {
+                row_width += inter_side_padding;
+            }
+            max_row_width = max_row_width.max(row_width);
+        }
+
+        let computed = layout.node_width.max(header_width.max(max_row_width));
+        assert!(computed.is_finite(), "node width must be finite");
+        assert!(computed > 0.0, "node width must be positive");
+        let prior = widths.insert(node.id, computed);
+        assert!(
+            prior.is_none(),
+            "node width map must not contain duplicate ids"
+        );
+    }
+
+    widths
+}
+
+pub(crate) fn scaled_font(ui: &egui::Ui, style: egui::TextStyle, scale: f32) -> egui::FontId {
     assert!(scale.is_finite(), "font scale must be finite");
     assert!(scale > 0.0, "font scale must be positive");
     let base = style.resolve(ui.style());
@@ -273,4 +345,17 @@ fn scaled_font(ui: &egui::Ui, style: egui::TextStyle, scale: f32) -> egui::FontI
         size: base.size * scale,
         family: base.family.clone(),
     }
+}
+
+fn text_width(
+    painter: &egui::Painter,
+    font: &egui::FontId,
+    text: &str,
+    color: egui::Color32,
+) -> f32 {
+    let galley = painter.layout_no_wrap(text.to_string(), font.clone(), color);
+    let width = galley.size().x;
+    assert!(width.is_finite(), "text width must be finite");
+    assert!(width >= 0.0, "text width must be non-negative");
+    width
 }
